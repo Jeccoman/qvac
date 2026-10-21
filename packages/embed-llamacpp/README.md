@@ -502,29 +502,27 @@ const fit = await EmbedLlamacpp.assessFit({
   config: { device: 'gpu', 'batch-size': '1024' }
 })
 
-fit.status // 'fits' | 'does-not-fit' | 'error'
-fit.reason // 'fits', 'does-not-fit', 'model-unreadable', 'no-backend-device' or 'unsupported-config'
-fit.message // with status 'error': what caused it, e.g. the refused config key
-fit.gpuLayers // what fits, which is not always what the request asked for
-fit.ctxSize
-fit.devices // one row per device the model was assigned to, then a `host` row
-fit.deviceBytes // model, context and compute summed across the devices, host excluded
-fit.hostBytes // the same, for the trailing host row
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // one row per device the model is assigned to, then the host CPU
+fit.devices[0] // { id, name, unified, usedBytes, freeBytes, totalBytes }
+fit.stats // {}
 ```
 
-A multimodal load is refused with `unsupported-config`: pass its `projectionModel` (or projector options in `config`), and the projection does not count the projector's weights and buffers, so it would otherwise answer for the text model alone.
+Each device row gives the memory the load takes on that device, as `usedBytes`, and the device's free and total memory. `id` is the PCI bus ID when the backend reports one, and the device name otherwise. `unified` is true for memory the host owns: the CPU, an integrated GPU, a GPU that shares the host's memory, Android's OpenCL GPU, and a device that reports no memory of its own, which takes the host's figures. On iOS a unified row's free memory is capped at the app's own limit. With `load_mode: 'mmap'`, the host row leaves out the mapped weights, which the OS can evict.
 
-`config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse is refused here as `status: "error"` with `unsupported-config`, and `message` names the setting and why. A setting left out takes llama's default.
+`status` is `unknown` for a load the fitter cannot project: one placed on the CPU, one with a LoRA adapter or a `projectionModel`, or one with `fit` turned off. `devices` is then empty. Projector options without a `projectionModel` reject, as the load refuses them.
 
-Pinning `gpu-layers` fixes the placement: the fitter refuses to move layers off a device the load claimed, so the answer is whether that exact placement fits, never a reduced one. Leave it unset for a projection that can place the model itself.
+`config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse rejects here. A setting left out takes llama's default.
+
+Pinning `gpu-layers` fixes the placement: the fitter keeps layers on the devices the load claimed, so the answer is for that exact placement. Leave it unset for a projection that can place the model itself.
 
 The projection applies the embedding load's own normalization: the micro-batch follows `batch-size`, a single sequence uses a unified KV cache, and the context is pinned to the model's trained context, or capped at it.
 
-`minCtxSize` sets a floor the fitter may not reduce the context below, defaulting to llama's own `fit-ctx` of 4096. `marginBytes` is the memory to leave free on every device, defaulting to llama's `fit-target` of 1 GiB per device. `backendsDir` is where the dynamically-loaded ggml backends live.
+`minCtxSize` sets a floor the fitter may not reduce the context below, defaulting to llama's own `fit-ctx` of 4096. `marginBytes` is the memory to leave free on every device. The load's own `fit-target`, 1 GiB per device by default, applies too, and the larger of the two binds. `backendsDir` is where the dynamically-loaded ggml backends live.
 
 `assessFit` returns a Promise. Concurrent calls run one at a time within this addon.
 
-A model the fitter cannot read resolves to `status: "error"`; only a broken request rejects.
+A model the fitter cannot read, an invalid request, or a machine with no backend device rejects with an error whose message starts with `assessFit:` and names the cause.
 
 ## Vector index
 
