@@ -1,7 +1,7 @@
 import test from 'brittle'
 import { handleGetLoadedModelInfo } from '@/handlers/get-loaded-model-info'
 import { ModelNotFoundError } from '@/errors'
-import { ERROR_CODES, ModelType, type NativeProbeFit } from '@/schemas'
+import { ERROR_CODES, ModelType, type ModelFitProbe } from '@/schemas'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 
 let idCounter = 0
@@ -10,7 +10,7 @@ function makeId(prefix: string) {
   return `${prefix}-${idCounter}`
 }
 
-function register(t: { teardown(fn: () => void): void }, fitProbe?: NativeProbeFit) {
+function register(t: { teardown(fn: () => void): void }, fitProbe?: ModelFitProbe) {
   const modelId = makeId('loaded-info')
   registerModel(modelId, {
     model: {} as unknown as AnyModel,
@@ -37,22 +37,8 @@ test('getLoadedModelInfo: unknown modelId throws ModelNotFoundError', function (
   }
 })
 
-test('getLoadedModelInfo: returns the advisory fit outcome recorded at load', function (t) {
-  const fitProbe: NativeProbeFit = {
-    verdict: 'fit',
-    basis: 'native-probe',
-    estimatorVersion: 'native-probe-v2',
-    reason: 'fits',
-    plan: { nCtx: 4096, nGpuLayers: 33, nGpuDevices: 1 },
-    projection: {
-      deviceName: 'Metal',
-      deviceBytes: 5_368_709_120,
-      hostBytes: 268_435_456,
-      weightsBytes: 4_294_967_296,
-      contextBytes: 1_073_741_824,
-      computeBytes: 0
-    }
-  }
+test('getLoadedModelInfo: returns the fit check recorded at load', function (t) {
+  const fitProbe: ModelFitProbe = { verdict: 'fits', stats: {} }
   const modelId = register(t, fitProbe)
 
   const { info } = handleGetLoadedModelInfo({ type: 'getLoadedModelInfo', modelId })

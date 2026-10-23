@@ -1,58 +1,44 @@
-import type { AsrFitRequest, AsrFitResult } from '@qvac/asr-ggml'
-import type { AudiogenFitRequest, AudiogenFitResult } from '@qvac/audiogen-ggml'
-import type { BciFitRequest, BciFitResult } from '@qvac/bci-whispercpp'
-import type {
-  DiffusionFitRequest,
-  DiffusionFitResult,
-  EsrganFitRequest,
-  WorldFitRequest
-} from '@qvac/diffusion-cpp'
-import type { EmbedFitRequest, EmbedFitResult } from '@qvac/embed-llamacpp'
-import type LlmLlamacpp from '@qvac/llm-llamacpp'
-import type { OcrFitRequest, OcrFitResult } from '@qvac/ocr-ggml'
-import type TranslationNmtcpp from '@qvac/translation-nmtcpp'
-import type { TtsFitRequest, TtsFitResult } from '@qvac/tts-ggml'
+import type { QvacPlugin } from '@/schemas/plugin'
+
+/** One device a load uses, as every addon's `assessFit` reports it. */
+export interface AddonFitDevice {
+  /** The PCI bus ID when the backend reports one, the device name otherwise. */
+  id: string
+  name: string
+  /** Memory the host owns: the host CPU, and a GPU that shares the host's memory. */
+  unified: boolean
+  usedBytes: number
+  freeBytes?: number
+  totalBytes?: number
+}
+
+/** The result every addon's `assessFit` returns. */
+export interface AddonFit {
+  status: 'fits' | 'does-not-fit' | 'unknown'
+  devices: AddonFitDevice[]
+  stats: Record<string, unknown>
+}
+
+/** A request for the fitter of the plugin that owns `addonPackage`. */
+export interface FitProbeRequest {
+  addonPackage: string
+  request: unknown
+}
 
 /**
- * The engine packages each expose their own `assessFit`, taking the same fields
- * their loader takes and returning the figures their fitter measures.
+ * Calls the request's addon fitter. Several plugins can share one addon, and
+ * only those that expose its `assessFit` carry it.
  */
-export type FitProbeRequest =
-  | { engine: 'llm-llamacpp'; request: LlmLlamacpp.FitRequest }
-  | { engine: 'embed-llamacpp'; request: EmbedFitRequest }
-  | { engine: 'asr-ggml'; request: AsrFitRequest }
-  | { engine: 'bci-whispercpp'; request: BciFitRequest }
-  | { engine: 'tts-ggml'; request: TtsFitRequest }
-  | { engine: 'audiogen-ggml'; request: AudiogenFitRequest }
-  | { engine: 'diffusion-cpp'; request: DiffusionFitRequest | EsrganFitRequest | WorldFitRequest }
-  | { engine: 'ocr-ggml'; request: OcrFitRequest }
-  | { engine: 'translation-nmtcpp'; request: TranslationNmtcpp.FitRequest }
-
-export type FitProbeEngine = FitProbeRequest['engine']
-
-export type FitProbeResult =
-  | { engine: 'llm-llamacpp'; result: LlmLlamacpp.FitResult }
-  | { engine: 'embed-llamacpp'; result: EmbedFitResult }
-  | { engine: 'asr-ggml'; result: AsrFitResult }
-  | { engine: 'bci-whispercpp'; result: BciFitResult }
-  | { engine: 'tts-ggml'; result: TtsFitResult }
-  | { engine: 'audiogen-ggml'; result: AudiogenFitResult }
-  | { engine: 'diffusion-cpp'; result: DiffusionFitResult }
-  | { engine: 'ocr-ggml'; result: OcrFitResult }
-  | { engine: 'translation-nmtcpp'; result: TranslationNmtcpp.FitResult }
-
-/** Calls one engine's fitter, taken from the plugin that owns its addon. */
-export async function callEngineFit(probe: FitProbeRequest): Promise<FitProbeResult> {
+export async function callEngineFit(probe: FitProbeRequest): Promise<AddonFit> {
   const { getAllPlugins } = await import('@/plugins/registry')
-  const addonPackage = `@qvac/${probe.engine}`
-  const plugin = getAllPlugins().find((candidate) => candidate.addonPackage === addonPackage)
+  const plugin: QvacPlugin | undefined = getAllPlugins().find(
+    (candidate) =>
+      candidate.addonPackage === probe.addonPackage && candidate.assessFit !== undefined
+  )
 
   if (plugin?.assessFit === undefined) {
-    throw new TypeError(`no registered plugin exposes assessFit for ${addonPackage}`)
+    throw new TypeError(`no registered plugin exposes assessFit for ${probe.addonPackage}`)
   }
 
-  return {
-    engine: probe.engine,
-    result: await plugin.assessFit(probe.request as never)
-  } as FitProbeResult
+  return (await plugin.assessFit(probe.request as never)) as AddonFit
 }
