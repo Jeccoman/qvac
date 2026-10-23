@@ -335,25 +335,19 @@ const fit = await assessFit({
   decoders: 5
 })
 
-fit.status // 'fits' | 'does-not-fit' | 'error'
-fit.reason // whisper's own wording, e.g. 'model-unreadable', 'no-backend-device'
-fit.modelType // 'tiny' … 'large v3'
-fit.deviceName
-fit.deviceBytes
-fit.weightsBytes
-fit.kvBytes
-fit.computeBytes
-fit.hostBytes
-fit.embedderBytes
-fit.report
+fit.status // 'fits' | 'does-not-fit'
+fit.devices // [{ id, name, unified, usedBytes, freeBytes, totalBytes }]
+fit.stats // {}
 ```
 
-The projection covers the whisper model and the embedder. `embedderBytes` is the host RAM the embedder keeps: its day and month projections, its session map and the dense projection it caches per day. It is counted in `hostBytes`, and on a device that shares system RAM it is part of the verdict. An embedder that cannot be read is `status: "error"` with reason `embedder-unreadable`.
+`devices` holds the device the load resolves to, then the host CPU, which holds the host-side buffers and the embedder. A load on the CPU is one row. `id` is the PCI bus ID when the backend reports one, so the same GPU matches across addons built on different backends, and the device name otherwise. `unified` is true for memory the host owns: the CPU, an integrated GPU, a GPU that shares the host's memory, Android's OpenCL GPU, and a device that reports no memory of its own, which takes the host's figures. On iOS a unified row's free memory is capped at the app's own limit. `usedBytes` is what the load takes on that device.
+
+The projection covers the whisper model and the embedder. The embedder's share of the host row is the RAM it keeps: its day and month projections, its session map and the dense projection it caches per day. On a device that shares system RAM it is part of the verdict.
 
 | Option | Description |
 | --- | --- |
 | `modelPath` | **Required.** Absolute path to the BCI model, or to its weightless description. |
-| `embedderPath` | The embedder, or its weightless description. Its host RAM is reported as `embedderBytes` and counted in `hostBytes`. Omitted, `bci-embedder.bin` next to `modelPath` is read, as a load reads it. |
+| `embedderPath` | The embedder, or its weightless description. Its host RAM is counted in the host row. Omitted, `bci-embedder.bin` next to `modelPath` is read, as a load reads it. |
 | `audioSeconds` | Longest single transcribe the projection must cover. |
 | `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. Omitted, the projection runs on the GPU, matching what the load does. |
 | `gpuDevice` | As the load takes it. |
@@ -363,7 +357,7 @@ The projection covers the whisper model and the embedder. `embedderBytes` is the
 
 `assessFit` returns a Promise. Concurrent calls run one at a time.
 
-A model or embedder the fitter cannot read resolves to `status: "error"`; a broken request, or a host with no native binding, rejects.
+A model or embedder the fitter cannot read, a broken request, or a host with no native binding rejects.
 
 ## Tests
 
