@@ -4,13 +4,9 @@ import android.content.Context
 import io.tether.qvac.sdk.QvacTransport
 import io.tether.qvac.sdk.QvacRuntimeProfile
 import io.tether.qvac.sdk.QvacWorkerStartException
+import io.tether.qvac.sdk.WorkerRpc
 import io.tether.qvac.sdk.requireSuccessfulWorkerControlResponse
-import io.tether.qvac.sdk.rpc.BareRpcProtocolException
-import io.tether.qvac.sdk.rpc.BareRpcSession
-import io.tether.qvac.sdk.rpc.JsonLinesDecoder
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
@@ -18,36 +14,26 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import to.holepunch.bare.kit.IPC
 import to.holepunch.bare.kit.Worklet
 
 class AndroidBareKitTransport private constructor(
-    private val session: BareRpcSession,
+    private val rpc: WorkerRpc,
+    private val channel: BareKitRpcChannel,
     private val worklet: Worklet,
-    private val json: Json,
     override val runtimeProfile: QvacRuntimeProfile,
-    private val rpcLimits: io.tether.qvac.sdk.rpc.BareRpcLimits,
 ) : QvacTransport {
     private val closeMutex = Mutex()
     private var closed = false
 
-    override suspend fun call(payload: JsonObject): JsonObject {
-        return decode(session.request(encode(payload)))
-    }
+    override suspend fun call(payload: JsonObject): JsonObject = rpc.call(payload)
 
-    override fun stream(payload: JsonObject): Flow<JsonObject> {
-        return decodeLines(session.responseStream(encode(payload)))
-    }
+    override fun stream(payload: JsonObject): Flow<JsonObject> = rpc.stream(payload)
 
-    override fun duplex(payload: JsonObject, input: Flow<ByteArray>): Flow<JsonObject> {
-        return decodeLines(session.duplex(encode(payload), input))
-    }
+    override fun duplex(payload: JsonObject, input: Flow<ByteArray>): Flow<JsonObject> = rpc.duplex(payload, input)
 
     fun pause(lingerMs: Int = DEFAULT_LINGER_MS) {
         worklet.suspend(lingerMs)
@@ -63,32 +49,11 @@ class AndroidBareKitTransport private constructor(
             closed = true
 
             withTimeoutOrNull(SHUTDOWN_TIMEOUT_MS) {
-                runCatching {
-                    session.request("""{"type":"__shutdown__"}""".encodeToByteArray())
-                }
+                runCatching { rpc.call(buildJsonObject { put("type", "__shutdown__") }) }
             }
-            runCatching { session.close() }
+            runCatching { rpc.close() }
+            runCatching { channel.close() }
             runCatching { worklet.terminate() }
-        }
-    }
-
-    private fun decodeLines(chunks: Flow<ByteArray>): Flow<JsonObject> = flow {
-        val decoder = JsonLinesDecoder(rpcLimits.maxJsonLineBytes)
-        chunks.collect { chunk ->
-            for (line in decoder.feed(chunk)) emit(decode(line.encodeToByteArray()))
-        }
-        for (line in decoder.finish()) emit(decode(line.encodeToByteArray()))
-    }
-
-    private fun encode(payload: JsonObject): ByteArray {
-        return json.encodeToString(JsonObject.serializer(), payload).encodeToByteArray()
-    }
-
-    private fun decode(payload: ByteArray): JsonObject {
-        return try {
-            json.parseToJsonElement(payload.decodeToString()).jsonObject
-        } catch (error: Throwable) {
-            throw BareRpcProtocolException("worker returned invalid JSON: ${error.message}")
         }
     }
 
@@ -100,12 +65,11 @@ class AndroidBareKitTransport private constructor(
             config: JsonObject = JsonObject(emptyMap()),
             runtimeContext: JsonObject? = null,
             memoryLimitBytes: Int = DEFAULT_MEMORY_LIMIT_BYTES,
-            rpcLimits: io.tether.qvac.sdk.rpc.BareRpcLimits = io.tether.qvac.sdk.rpc.BareRpcLimits(),
         ): AndroidBareKitTransport {
             var started: AndroidBareKitTransport? = null
             try {
                 return withContext(Dispatchers.Main.immediate) {
-                    connectOnMain(context, assetName, homeDirectory, config, runtimeContext, memoryLimitBytes, rpcLimits)
+                    connectOnMain(context, assetName, homeDirectory, config, runtimeContext, memoryLimitBytes)
                         .also { started = it }
                 }
             } catch (error: Throwable) {
@@ -134,16 +98,11 @@ class AndroidBareKitTransport private constructor(
             config: JsonObject,
             runtimeContext: JsonObject?,
             memoryLimitBytes: Int,
-            rpcLimits: io.tether.qvac.sdk.rpc.BareRpcLimits,
         ): AndroidBareKitTransport {
-            val json = Json {
-                ignoreUnknownKeys = true
-                explicitNulls = false
-            }
             val options = Worklet.Options().memoryLimit(memoryLimitBytes)
             val worklet = Worklet(options)
             var channel: BareKitRpcChannel? = null
-            var session: BareRpcSession? = null
+            var rpc: WorkerRpc? = null
 
             try {
                 val arguments = arrayOf(
@@ -155,17 +114,15 @@ class AndroidBareKitTransport private constructor(
                     worklet.start(assetName, source, arguments)
                 }
 
-                val ipc = IPC(worklet)
-                val connectedChannel = BareKitRpcChannel(ipc)
+                val connectedChannel = BareKitRpcChannel(IPC(worklet))
                 channel = connectedChannel
-                val connectedSession = BareRpcSession(connectedChannel, rpcLimits)
-                session = connectedSession
+                val connectedRpc = WorkerRpc(read = connectedChannel::read, send = connectedChannel::write)
+                rpc = connectedRpc
                 val transport = AndroidBareKitTransport(
-                    connectedSession,
+                    connectedRpc,
+                    connectedChannel,
                     worklet,
-                    json,
                     AndroidRuntimeProfile.load(context),
-                    rpcLimits,
                 )
                 val effectiveRuntimeContext = androidRuntimeContext(runtimeContext)
                 if (config.isNotEmpty() || effectiveRuntimeContext.isNotEmpty()) {
@@ -181,12 +138,8 @@ class AndroidBareKitTransport private constructor(
                 return transport
             } catch (error: Throwable) {
                 withContext(NonCancellable) {
-                    val failedSession = session
-                    if (failedSession == null) {
-                        runCatching { channel?.close() }
-                    } else {
-                        runCatching { failedSession.close() }
-                    }
+                    runCatching { rpc?.close() }
+                    runCatching { channel?.close() }
                     runCatching { worklet.terminate() }
                 }
                 if (error is CancellationException) throw error
