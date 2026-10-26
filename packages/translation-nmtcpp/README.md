@@ -566,16 +566,23 @@ Call `TranslationNmtcpp.assessFit({ files, config, marginBytes? })` before
 constructing a model to estimate whether its weights can load with the memory
 free right now. `files` and `config` match the constructor; `files.model` must
 be an absolute path. It returns a Promise, and concurrent calls run one at a
-time within the addon. The result contains `status` (`fits`,
-`does-not-fit`, or `error`), `reason`, `backend`, `modelBytes`, `requiredBytes`,
-`freeBytes`, and a readable `report`. An unreadable model resolves with
-`status: 'error'`; a malformed request rejects. No model instance or weights are
-loaded.
+time within the addon. The result is `{ status, devices, stats }`: `status` is
+`fits`, `does-not-fit`, or `unknown`, and `devices` is
+`[{ id, name, unified, usedBytes, freeBytes, totalBytes }]`, the selected device
+and, for a discrete GPU, then the host CPU, each charged the allowance. A device
+that shares host memory is one row; a load on the CPU, which every Bergamot load
+is, is one row. `id` is the PCI bus ID when the backend reports one, and the
+device name otherwise. `unified` is true for memory the host owns: the CPU, an
+integrated GPU, a GPU that shares the host's memory, Android's OpenCL GPU, and a
+device that reports no memory of its own, which takes the host's figures. On iOS
+a unified row's free memory is capped at the app's own limit. No model instance
+or weights are loaded.
 The estimate budgets four times the model file size plus 512 MiB for copies,
-tokenizers, and inference buffers; actual use varies by model. An indeterminate placement reports `error`
-with `reason: 'insufficient-evidence'`. IndicTrans `main-gpu` selection currently
-reports `unsupported-config`. Fit is a point-in-time estimate, so
-another load can consume memory before `load()` runs.
+tokenizers, and inference buffers; actual use varies by model. A placement the
+estimate cannot settle, memory that cannot be read, and IndicTrans `main-gpu`
+selection are `unknown`, with no rows. A model or vocabulary that cannot be
+read, no usable device, or a malformed request rejects. Fit is a point-in-time
+estimate, so another load can consume memory before `load()` runs.
 
 ```js
 const fit = await TranslationNmtcpp.assessFit({
@@ -583,7 +590,10 @@ const fit = await TranslationNmtcpp.assessFit({
   config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans },
   marginBytes: 256 * 1024 * 1024
 })
-if (fit.status !== 'fits') console.log(fit.report)
+
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // [{ id, name, unified, usedBytes, freeBytes, totalBytes }]
+fit.stats // {}
 ```
 
 - `load(): Promise<void>` — loads the model (both stages for pivot setups);
