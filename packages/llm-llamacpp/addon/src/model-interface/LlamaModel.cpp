@@ -2131,8 +2131,8 @@ ParsedPromptPayload parsePromptPayload(
   return parsed;
 }
 
-// Rethrows @p error as calcToken reports every rejection: `InvalidArgument`,
-// prefixed `calcToken:` and, when given, the input @p field, instead of the
+// Rethrows @p error as calcTokens reports every rejection: `InvalidArgument`,
+// prefixed `calcTokens:` and, when given, the input @p field, instead of the
 // prompt parser's prefix.
 [[noreturn]] void
 throwCountError(const qvac_errors::StatusError& error, const char* field) {
@@ -2145,15 +2145,15 @@ throwCountError(const qvac_errors::StatusError& error, const char* field) {
     message.remove_suffix(1);
   }
   const std::string prefix = field == nullptr
-                                 ? std::string("calcToken: ")
-                                 : string_format("calcToken: %s: ", field);
+                                 ? std::string("calcTokens: ")
+                                 : string_format("calcTokens: %s: ", field);
   throw qvac_errors::StatusError(
       ADDON_ID,
       toString(qvac_errors::general_error::InvalidArgument),
       prefix + std::string(message));
 }
 
-// Parses one calcToken input, strictly and without touching staged media.
+// Parses one calcTokens input, strictly and without touching staged media.
 ParsedPromptPayload parseCountInput(
     const std::string& json, const char* field, bool isTextLlm,
     const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>&
@@ -2182,13 +2182,13 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
       [this] { state_->llmContext_->resetMedia(); });
 }
 
-size_t LlamaModel::calcToken(const CalcTokenRequest& request) const {
+size_t LlamaModel::calcTokens(const CalcTokensRequest& request) const {
   std::shared_lock lock(stateMtx_);
   if (!state_ || !state_->llmContext_) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(qvac_errors::general_error::InvalidArgument),
-        "calcToken: the model is not loaded");
+        "calcTokens: the model is not loaded");
   }
   LlmContext& context = *state_->llmContext_;
   if (!request.text.has_value() && !request.history.has_value() &&
@@ -2196,7 +2196,7 @@ size_t LlamaModel::calcToken(const CalcTokenRequest& request) const {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(qvac_errors::general_error::InvalidArgument),
-        "calcToken: pass text, history or tools");
+        "calcTokens: pass text, history or tools");
   }
   if (!request.history.has_value() && !request.tools.has_value()) {
     return ::common_tokenize(
@@ -2222,7 +2222,7 @@ size_t LlamaModel::calcToken(const CalcTokenRequest& request) const {
       throw qvac_errors::StatusError(
           ADDON_ID,
           toString(qvac_errors::general_error::InvalidArgument),
-          "calcToken: tools must hold only function definitions");
+          "calcTokens: tools must hold only function definitions");
     }
     conversation.tools.insert(
         conversation.tools.end(),
@@ -2233,7 +2233,7 @@ size_t LlamaModel::calcToken(const CalcTokenRequest& request) const {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(qvac_errors::general_error::InvalidArgument),
-        "calcToken: media messages cannot be counted");
+        "calcTokens: media messages cannot be counted");
   }
   if (request.text.has_value()) {
     common_chat_msg userTurn;
@@ -2245,7 +2245,7 @@ size_t LlamaModel::calcToken(const CalcTokenRequest& request) const {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(qvac_errors::general_error::InvalidArgument),
-        "calcToken: history and text hold no message to count");
+        "calcTokens: history and text hold no message to count");
   }
   try {
     return context.countChatTokens(conversation.chatMsgs, conversation.tools);

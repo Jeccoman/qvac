@@ -196,11 +196,11 @@ public:
   /// kept for the key.
   void discardCache(const std::string& cacheKey);
 
-  /// What `calcToken` counts. `history` is a `Message[]` in `process`'s JSON
+  /// What `calcTokens` counts. `history` is a `Message[]` in `process`'s JSON
   /// shape, tool definitions allowed; `tools` holds tool definitions only. A
   /// tool name in both is a duplicate and throws. A request with none of the
   /// three throws.
-  struct CalcTokenRequest {
+  struct CalcTokensRequest {
     std::optional<std::string> text;
     std::optional<std::string> history;
     std::optional<std::string> tools;
@@ -214,11 +214,11 @@ public:
   /// `process` renders it. Tools the template leaves out are not
   /// counted, and a `prefill` request, which renders without a user turn, can
   /// differ. Media is not counted. Every invalid request, a media message
-  /// included, throws `InvalidArgument` prefixed `calcToken:`; a chat template
+  /// included, throws `InvalidArgument` prefixed `calcTokens:`; a chat template
   /// that cannot render the conversation fails as it would for `process`.
   /// Reads only load-time state and never enters the job scheduler, so it runs
   /// beside in-flight requests.
-  [[nodiscard]] size_t calcToken(const CalcTokenRequest& request) const;
+  [[nodiscard]] size_t calcTokens(const CalcTokensRequest& request) const;
 
   /**
    * The Reset method.
