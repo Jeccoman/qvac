@@ -4,6 +4,7 @@
 #include <any>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -15,10 +16,18 @@
 #include <utility>
 #include <vector>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE
+#include <os/proc.h>
+#endif
+#endif
+
 #include <audiogen-cpp/acestep/fit.h>
 #ifdef AUDIOGEN_HAS_MINIMAX
 #include <audiogen-cpp/minimax/fit.h>
 #endif
+#include <ggml-backend.h>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
@@ -673,7 +682,7 @@ JSCATCH
 // Returns a Promise of the result.
 //
 // Takes no instance and loads nothing: the fitters read GGUF metadata only. A
-// model they cannot read is an "error" status carrying the engine's own reason.
+// model they cannot read, or a request they cannot project, rejects.
 //
 // The request is read into owned C++ values on the JS thread, the fitter runs
 // on a worker thread with no JS access, and the result object is built back on
@@ -747,69 +756,150 @@ private:
   js::Object request_;
 };
 
-inline js_value_t*
-fitResultObject(js_env_t* env, const tts_cpp::acestep::FitResult& fit) {
-  const char* status = "error";
-  if (fit.status == tts_cpp::acestep::FitStatus::Success) {
-    status = "fits";
-  } else if (fit.status == tts_cpp::acestep::FitStatus::Failure) {
-    status = "does-not-fit";
+struct FitDevice {
+  std::string id;
+  std::string name;
+  bool unified;
+  double usedBytes;
+  double freeBytes;
+  double totalBytes;
+};
+
+struct FitResult {
+  std::string status;
+  std::vector<FitDevice> devices;
+};
+
+// The PCI bus ID when the backend reports one, so the same GPU matches across
+// addons built on different backends; the device name otherwise.
+//
+// Unified marks memory the host owns: the CPU, an integrated GPU, a GPU that
+// shares host memory, Android's OpenCL GPU, and a device that reports no
+// memory of its own. A unified device that reports none takes the CPU's
+// figures, and on iOS a unified device's free memory is capped at the app's
+// own limit.
+inline FitDevice fitDevice(
+    ggml_backend_dev_t device, const std::string& name, bool sharesHostMemory,
+    uint64_t usedBytes, uint64_t freeBytes, uint64_t totalBytes) {
+  std::string id = name;
+  std::string deviceName = name;
+  const bool reportsNoMemory = totalBytes == 0;
+  bool unified = sharesHostMemory || reportsNoMemory;
+  if (device != nullptr) {
+    ggml_backend_dev_props props{};
+    ggml_backend_dev_get_props(device, &props);
+    id = props.device_id != nullptr ? props.device_id : props.name;
+    deviceName = props.name;
+    unified = unified || props.memory_unified ||
+              props.type == GGML_BACKEND_DEVICE_TYPE_IGPU ||
+              props.type == GGML_BACKEND_DEVICE_TYPE_CPU;
+#if defined(__ANDROID__)
+    const char* registry =
+        ggml_backend_reg_name(ggml_backend_dev_backend_reg(device));
+    unified = unified ||
+              (registry != nullptr && std::strcmp(registry, "OpenCL") == 0);
+#endif
+  }
+  if (unified && reportsNoMemory) {
+    if (ggml_backend_dev_t host =
+            ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU)) {
+      size_t hostFree = 0;
+      size_t hostTotal = 0;
+      ggml_backend_dev_memory(host, &hostFree, &hostTotal);
+      freeBytes = static_cast<uint64_t>(hostFree);
+      totalBytes = static_cast<uint64_t>(hostTotal);
+    }
+  }
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+  if (unified) {
+    const auto appLimit = static_cast<uint64_t>(os_proc_available_memory());
+    if (appLimit > 0 && appLimit < freeBytes) {
+      freeBytes = appLimit;
+    }
+  }
+#endif
+  return {
+      id,
+      deviceName,
+      unified,
+      static_cast<double>(usedBytes),
+      static_cast<double>(freeBytes),
+      static_cast<double>(totalBytes)};
+}
+
+// One row per device pool the pipeline peaks on, then the host CPU, which holds
+// the CPU-placed stages, the mapped weights and the host-side buffers. Each
+// figure is that pool's peak across the pipeline's phases. On the CPU the
+// device pool is the host pool and both peaks measure it, so a load there is
+// one row carrying that peak once.
+inline FitResult toFitResult(const tts_cpp::acestep::FitResult& fit) {
+  if (fit.status == tts_cpp::acestep::FitStatus::Error) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InternalError, "assessFit: " + fit.reason);
   }
 
+  FitResult result;
+  result.status = fit.status == tts_cpp::acestep::FitStatus::Success
+                      ? "fits"
+                      : "does-not-fit";
+
+  ggml_backend_dev_t host =
+      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  if (fit.device_is_cpu) {
+    result.devices.push_back(fitDevice(
+        host,
+        fit.device_name,
+        true,
+        std::max(fit.peak_device_bytes, fit.peak_host_bytes),
+        fit.host_free_bytes,
+        fit.host_total_bytes));
+    return result;
+  }
+
+  result.devices.push_back(fitDevice(
+      ggml_backend_dev_by_name(fit.device_name.c_str()),
+      fit.device_name,
+      fit.device_shares_host_memory,
+      fit.peak_device_bytes,
+      fit.device_free_bytes,
+      fit.device_total_bytes));
+  for (const auto& pool : fit.extra_devices) {
+    result.devices.push_back(fitDevice(
+        ggml_backend_dev_by_name(pool.name.c_str()),
+        pool.name,
+        pool.shares_host_memory,
+        pool.peak_bytes,
+        pool.free_bytes,
+        pool.total_bytes));
+  }
+  result.devices.push_back(fitDevice(
+      host,
+      "CPU",
+      true,
+      fit.peak_host_bytes,
+      fit.host_free_bytes,
+      fit.host_total_bytes));
+  return result;
+}
+
+inline js_value_t* fitResultObject(js_env_t* env, const FitResult& fit) {
   auto result = js::Object::create(env);
-  auto setText = [&](const char* name, const std::string& value) {
-    result.setProperty(env, name, js::String::create(env, value));
-  };
-  auto bytes = [&](const char* name, uint64_t value) {
-    result.setProperty(
-        env, name, js::Number::create(env, static_cast<double>(value)));
-  };
-
-  setText("status", status);
-  setText("reason", fit.reason);
-  setText("modelName", fit.model_name);
-  setText("deviceName", fit.device_name);
-  setText("report", fit.report);
-  result.setProperty(env, "isTurbo", js::Boolean::create(env, fit.is_turbo));
-  result.setProperty(
-      env, "deviceIsCpu", js::Boolean::create(env, fit.device_is_cpu));
-  result.setProperty(
-      env,
-      "deviceSharesHostMemory",
-      js::Boolean::create(env, fit.device_shares_host_memory));
-  result.setProperty(
-      env, "stagesResident", js::Boolean::create(env, fit.stages_resident));
-  bytes("deviceFreeBytes", fit.device_free_bytes);
-  bytes("deviceTotalBytes", fit.device_total_bytes);
-  bytes("deviceBytes", fit.peak_device_bytes);
-  bytes("hostBytes", fit.peak_host_bytes);
-  // Where the device does not share the host pool, host memory is a budget of
-  // its own, so a caller cannot weigh `hostBytes` without these.
-  bytes("hostFreeBytes", fit.host_free_bytes);
-  bytes("hostTotalBytes", fit.host_total_bytes);
-
-  // `deviceBytes` is a peak across the pipeline's phases, so it never divides
-  // into the parts a caller can act on. The per-stage rows carry that split.
-  auto stages = js::Array::create(env);
-  for (size_t i = 0; i < fit.stages.size(); ++i) {
-    const auto& stage = fit.stages[i];
+  result.setProperty(env, "status", js::String::create(env, fit.status));
+  auto devices = js::Array::create(env);
+  for (size_t i = 0; i < fit.devices.size(); ++i) {
+    const auto& row = fit.devices[i];
     auto entry = js::Object::create(env);
-    entry.setProperty(env, "name", js::String::create(env, stage.name));
+    entry.setProperty(env, "id", js::String::create(env, row.id));
+    entry.setProperty(env, "name", js::String::create(env, row.name));
+    entry.setProperty(env, "unified", js::Boolean::create(env, row.unified));
+    entry.setProperty(env, "usedBytes", js::Number::create(env, row.usedBytes));
+    entry.setProperty(env, "freeBytes", js::Number::create(env, row.freeBytes));
     entry.setProperty(
-        env, "deviceName", js::String::create(env, stage.device_name));
-    entry.setProperty(env, "onGpu", js::Boolean::create(env, stage.on_gpu));
-    auto stageBytes = [&](const char* name, uint64_t value) {
-      entry.setProperty(
-          env, name, js::Number::create(env, static_cast<double>(value)));
-    };
-    stageBytes("weightsBytes", stage.weights_bytes);
-    stageBytes("weightsMmapBytes", stage.weights_mmap_bytes);
-    stageBytes("stateBytes", stage.state_bytes);
-    stageBytes("computeBytes", stage.compute_bytes);
-    stageBytes("hostBytes", stage.host_bytes);
-    stages.set(env, static_cast<uint32_t>(i), entry);
+        env, "totalBytes", js::Number::create(env, row.totalBytes));
+    devices.set(env, static_cast<uint32_t>(i), entry);
   }
-  result.setProperty(env, "stages", stages);
+  result.setProperty(env, "devices", devices);
+  result.setProperty(env, "stats", js::Object::create(env));
   return result;
 }
 
@@ -894,17 +984,6 @@ inline tts_cpp::minimax::FitWorkload minimaxFitWorkload(FitRequest& request) {
 
 using FitWork = std::function<tts_cpp::acestep::FitResult()>;
 
-/// An engine the addon loads and audiogen-cpp cannot project. The shape
-/// matches a fit so a caller reads the verdict the same way for every engine.
-inline tts_cpp::acestep::FitResult
-unsupportedEngineResult(const std::string& engine) {
-  tts_cpp::acestep::FitResult result;
-  result.status = tts_cpp::acestep::FitStatus::Error;
-  result.reason = "unsupported-engine";
-  result.model_name = engine;
-  return result;
-}
-
 /// Reads the request on the JS thread. The returned work owns every value it
 /// needs; an invalid request throws here, before any thread starts.
 inline FitWork fitWork(FitRequest& request) {
@@ -922,17 +1001,18 @@ inline FitWork fitWork(FitRequest& request) {
     };
   }
 #endif
-  return [engine = std::move(engine)]() {
-    return unsupportedEngineResult(engine);
-  };
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      "assessFit: " + engine + " has no fitter in this build");
 }
 
 // The fitters register the ggml backends on first use, process-wide state two
-// concurrent fits would race, so fits run one at a time.
-inline tts_cpp::acestep::FitResult runFit(const FitWork& work) {
+// concurrent fits would race, so fits run one at a time. The rows read the
+// devices those backends registered.
+inline FitResult runFit(const FitWork& work) {
   static std::mutex fitMutex;
   const std::lock_guard<std::mutex> lock(fitMutex);
-  return work();
+  return toFitResult(work());
 }
 
 inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
