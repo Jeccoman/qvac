@@ -71,6 +71,36 @@ test('a load-time streamingChunkMs is validated the same way', async (t) => {
   await model.unload()
 })
 
+test('zero means the model default on both paths and is accepted', async (t) => {
+  // Native rules: a run-level chunkMs of 0 is ignored and a load-time
+  // streamingChunkMs of 0 resolves to Nemotron's 320 ms default.
+  const binding = new NemotronBinding()
+  const model = createNemotron({ binding, parakeetConfig: { streamingChunkMs: 0 } })
+  await model.load()
+
+  const byLoad = pushable()
+  const first = await model.runStreaming(byLoad)
+  byLoad.end()
+  await first.await()
+
+  const byRun = pushable()
+  const second = await model.runStreaming(byRun, { chunkMs: 0 })
+  byRun.end()
+  await second.await()
+
+  // A run-level 0 falls back to the load-time value, which is still checked.
+  const bad = createNemotron({
+    binding: new NemotronBinding(),
+    parakeetConfig: { streamingChunkMs: 1000 }
+  })
+  await bad.load()
+  const stream = pushable()
+  await t.exception(() => bad.runStreaming(stream, { chunkMs: 0 }), /not supported by Nemotron/)
+  stream.end()
+  await bad.unload()
+  await model.unload()
+})
+
 test('non-Nemotron models keep accepting any chunkMs', async (t) => {
   const model = createNemotron({ binding: new MockedBinding() })
   await model.load()

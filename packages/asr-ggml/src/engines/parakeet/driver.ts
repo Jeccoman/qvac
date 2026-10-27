@@ -389,7 +389,7 @@ export class ParakeetDriver implements AsrDriver {
     const streamingOpts = this._validateStreamingOptions(opts);
     const addon = this._requireAddon();
     this._assertNemotronChunkMs(
-      streamingOpts.chunkMs ?? this.params.streamingChunkMs,
+      this._effectiveStreamingChunkMs(streamingOpts.chunkMs),
     );
     const response = this.ctx.job.start() as QvacResponse<ASRStreamOutput>;
     let closing = false;
@@ -423,6 +423,20 @@ export class ParakeetDriver implements AsrDriver {
         return closing;
       },
     };
+  }
+
+  /**
+   * The cadence the native session will run at, following its own fallback
+   * rules: a run-level `chunkMs` of 0 is ignored (`applyStreamingOverrides`),
+   * a load-time `streamingChunkMs` of 0 means the model default
+   * (`resolveStreamingChunkMs`). `undefined` = the model default, which is
+   * always a trained cadence.
+   */
+  _effectiveStreamingChunkMs(runChunkMs: number | undefined): number | undefined {
+    if (runChunkMs !== undefined && runChunkMs > 0) return runChunkMs;
+    const loadChunkMs = this.params.streamingChunkMs;
+    if (loadChunkMs !== undefined && loadChunkMs > 0) return loadChunkMs;
+    return undefined;
   }
 
   /**
