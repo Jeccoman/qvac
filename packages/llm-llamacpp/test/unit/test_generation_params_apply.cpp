@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "model-interface/GenerationParamsApply.hpp"
 #include "utils/ChatTemplateUtils.hpp"
@@ -642,6 +643,25 @@ TEST(GenerationParamsApplyTest, InstallingASchemaClearsToolGrammarCompanions) {
   EXPECT_FALSE(sampling.grammar_lazy);
   EXPECT_TRUE(sampling.grammar_triggers.empty());
   EXPECT_TRUE(sampling.preserved_tokens.empty());
+}
+
+// fabric's schema-to-grammar conversion recurses per level, so a schema deep
+// enough to overflow a worker thread's stack is rejected before it runs.
+TEST(GenerationParamsApplyTest, DeeplyNestedSchemaIsRejected) {
+  common_params_sampling sampling;
+  int nPredict = -1;
+
+  GenerationParams overrides;
+  std::string schema;
+  for (int i = 0; i < 2000; ++i) {
+    schema += R"({"type":"array","items":)";
+  }
+  schema += R"({"type":"string"})" + std::string(2000, '}');
+  overrides.json_schema = schema;
+  EXPECT_THROW(
+      applyGenerationOverridesToSampling(sampling, nPredict, overrides),
+      qvac_errors::StatusError);
+  EXPECT_EQ(sampling.grammar.type, COMMON_GRAMMAR_TYPE_NONE);
 }
 
 // The same clear applies to a per-request `grammar`, which is USER-typed and

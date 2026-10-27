@@ -43,6 +43,7 @@
 #include "inference-addon-cpp/LlamacppUtils.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/ChatTemplateUtils.hpp"
+#include "utils/JsonDepth.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ModelMemoryPolicy.hpp"
 #include "utils/ScopeGuard.hpp"
@@ -1825,38 +1826,8 @@ std::string optionalString(
   return it->second.get<std::string>();
 }
 
-// picojson recurses once per nesting level with no limit, so deep enough input
-// overflows a worker thread's stack. Real requests and tool schemas nest far
-// less.
-constexpr size_t kMaxJsonDepth = 128;
-
-// Whether arrays and objects in @p json nest deeper than kMaxJsonDepth.
-// Brackets inside strings are skipped.
-bool nestsTooDeep(const std::string& json) {
-  size_t depth = 0;
-  bool inString = false;
-  bool escaped = false;
-  for (const char c : json) {
-    if (inString) {
-      if (escaped) {
-        escaped = false;
-      } else if (c == '\\') {
-        escaped = true;
-      } else if (c == '"') {
-        inString = false;
-      }
-    } else if (c == '"') {
-      inString = true;
-    } else if (c == '[' || c == '{') {
-      if (++depth > kMaxJsonDepth) {
-        return true;
-      }
-    } else if ((c == ']' || c == '}') && depth > 0) {
-      --depth;
-    }
-  }
-  return false;
-}
+using qvac_lib_inference_addon_llama::utils::kMaxJsonDepth;
+using qvac_lib_inference_addon_llama::utils::nestsTooDeep;
 
 // The same value in an order-preserving parse of the request, or null when
 // that parse failed or lacks it.
