@@ -1,71 +1,113 @@
 /**
- * TranscribePsy-250M-EU-sub transcription from a WAV file.
+ * TranscribePsy transcription from an audio file.
  *
  * Usage:
- *   npx tsx examples/asr/parakeet-transcribepsy-filesystem.ts <wav-file> [transcribepsy-gguf]
+ *   npx tsx examples/asr/parakeet-transcribepsy-filesystem.ts <audio-file> [transcribepsy-gguf] [--coreml] [--window-sec <seconds>]
  *
- * Uses PARAKEET_TRANSCRIBEPSY_250M_Q8_0 from the registry by default, or a
- * local GGUF when supplied. Audio should be 16 kHz mono PCM in a WAV container.
- * Supports Dutch, English, French, German, Italian, Polish, Portuguese and
- * Spanish without a language option. Long recordings use the model's recommended
- * 60-second windows with 25% overlap automatically.
+ * TranscribePsy-250M-EU-sub is a 254M Parakeet-TDT distilled for Dutch,
+ * English, French, German, Italian, Polish, Portuguese and Spanish; the engine
+ * detects the language, so there is nothing to set. The default constant
+ * (`PARAKEET_TRANSCRIBEPSY_250M_Q8_0`) runs on ggml everywhere. On
+ * macOS and iOS, `--coreml` loads the Core ML distribution instead
+ * (`PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0`): the SDK downloads its
+ * encoder and decoder bundles with the GGUF, and both stages run on the Neural
+ * Engine. Anywhere else that constant is refused at load time.
  *
- * On macOS, a local transcribepsy-250m-eu-sub-coreml.gguf can be used with its
- * required encoder and decoder .mlmodelc sidecars in the same directory.
+ * An optional local GGUF path overrides the registry model. For a local Core ML
+ * GGUF, keep its required encoder and decoder bundles beside it.
+ *
+ * Long recordings are encoded in overlapping windows, so memory stays flat
+ * however long the file is. Without `--window-sec` the engine uses the 60 s
+ * windows with 25 % overlap the model recommends; an explicit window is sent
+ * as encoder frames (12.5 per second) with a quarter of it as context, which
+ * is how a phone with little memory can trade speed for a smaller footprint.
  */
 import {
   loadModel,
   unloadModel,
   transcribe,
   close,
-  PARAKEET_TRANSCRIBEPSY_250M_Q8_0
+  PARAKEET_TRANSCRIBEPSY_250M_Q8_0,
+  PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0
 } from '@qvac/sdk'
 
-const [audioFilePath, modelPath] = process.argv.slice(2)
+const ENCODER_FRAMES_PER_SECOND = 12.5
+const RECOMMENDED_OVERLAP = 0.25
 
-if (!audioFilePath || audioFilePath === '--help') {
+const args = process.argv.slice(2)
+const useCoreml = args.includes('--coreml')
+const windowIndex = args.indexOf('--window-sec')
+const windowSeconds = windowIndex === -1 ? undefined : Number(args[windowIndex + 1])
+const [audioFilePath, modelPath] = args.filter(
+  (arg, index) => !arg.startsWith('--') && (windowIndex === -1 || index !== windowIndex + 1)
+)
+
+if (
+  args.includes('--help') ||
+  !audioFilePath ||
+  (windowSeconds !== undefined && (!Number.isFinite(windowSeconds) || windowSeconds <= 0))
+) {
   console.error(
-    'Usage: npx tsx examples/asr/parakeet-transcribepsy-filesystem.ts ' +
-      '<wav-file> [transcribepsy-gguf]'
+    'Usage: npx tsx examples/asr/parakeet-transcribepsy-filesystem.ts <audio-file> [transcribepsy-gguf] ' +
+      '[--coreml] [--window-sec <seconds>]'
   )
-  console.error('If the model path is omitted, defaults to the registry model.')
-  process.exit(audioFilePath === '--help' ? 0 : 1)
+  process.exit(args.includes('--help') ? 0 : 1)
 }
 
-async function run(audioPath: string): Promise<void> {
-  let modelId: string | undefined
-  try {
-    console.log('▸ Loading TranscribePsy model...')
-    modelId = await loadModel({
-      modelSrc: modelPath ?? PARAKEET_TRANSCRIBEPSY_250M_Q8_0,
-      modelType: 'parakeet-transcription',
-      modelConfig: {
-        maxThreads: 4
-      },
-      onProgress: (p) => {
-        const mb = (n: number) => (n / 1e6).toFixed(1)
-        const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`
-        process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`)
-        if (p.percentage >= 100) process.stderr.write('\n')
+// An explicit window becomes the engine's frame counts; the overlap is shared
+// half and half with each neighbouring window.
+const longForm =
+  windowSeconds === undefined
+    ? {}
+    : {
+        longFormWindowFrames: Math.round(windowSeconds * ENCODER_FRAMES_PER_SECOND),
+        longFormContextFrames: Math.round(
+          (windowSeconds * ENCODER_FRAMES_PER_SECOND * RECOMMENDED_OVERLAP) / 2
+        )
       }
-    })
-    console.log(`▸ TranscribePsy model loaded with ID: ${modelId}`)
-    console.log('▸ Transcribing audio...')
-    console.log(await transcribe({ modelId, audioChunk: audioPath }))
-  } finally {
-    try {
-      if (modelId !== undefined) {
-        console.log('▸ Unloading model...')
-        await unloadModel({ modelId })
-        console.log('▸ Done')
-      }
-    } finally {
-      await close()
+
+const modelSrc =
+  modelPath ??
+  (useCoreml ? PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0 : PARAKEET_TRANSCRIBEPSY_250M_Q8_0)
+
+let modelId: string | undefined
+try {
+  console.log(`▸ Loading TranscribePsy (${useCoreml ? 'Core ML distribution' : 'ggml'})...`)
+  modelId = await loadModel({
+    modelSrc,
+    modelType: 'parakeet-transcription',
+    modelConfig: longForm,
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1)
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`)
+      if (p.percentage >= 100) process.stderr.write('\n')
     }
-  }
-}
+  })
 
-run(audioFilePath).catch((error) => {
+  console.log(
+    windowSeconds === undefined
+      ? '▸ Transcribing with the windows the model recommends (60 s, 25 % overlap)...'
+      : `▸ Transcribing in ${windowSeconds} s windows...`
+  )
+  const call = transcribe({ modelId, audioChunk: audioFilePath })
+  const text = await call
+  const stats = await call.stats
+
+  console.log(text)
+  if (stats) {
+    console.log(
+      `▸ ${stats.audioDuration?.toFixed(1) ?? '?'} s of audio, real-time factor ${stats.realTimeFactor?.toFixed(3) ?? '?'}` +
+        (useCoreml ? `, encoder on Core ML: ${stats.encoderUsedCoreml === 1 ? 'yes' : 'no'}` : '')
+    )
+  }
+} catch (error) {
   console.error('✖', error)
   process.exitCode = 1
-})
+} finally {
+  try {
+    if (modelId !== undefined) await unloadModel({ modelId })
+  } finally {
+    await close()
+  }
+}
