@@ -732,30 +732,6 @@ test('audiogen: the minimax device follows the load', (t) => {
   }
 })
 
-test('audiogen: Core ML cannot be projected as a native GGML load', (t) => {
-  const plan = createFitRequest({
-    modelType: ModelType.audiogenGgml,
-    modelPath: '',
-    modelConfig: {
-      engine: 'minimax',
-      coremlProfileDir: '/models/coreml',
-      coremlComputeUnits: 'CPU_AND_NE'
-    },
-    artifacts: MINIMAX_ARTIFACTS,
-    isShardedModel: false
-  })
-  t.ok(plan.supported)
-  if (!plan.supported || plan.probe.engine !== 'audiogen-ggml') return
-  t.alike(plan.probe.request, {
-    engine: 'minimax',
-    lmPath: MINIMAX_ARTIFACTS.lmModelPath,
-    synthPath: MINIMAX_ARTIFACTS.synthModelPath,
-    coremlProfileDir: '/models/coreml',
-    coremlComputeUnits: 'CPU_AND_NE',
-    gpuLayers: 0
-  })
-})
-
 test('audiogen: an incomplete minimax pair is refused', (t) => {
   t.alike(
     createFitRequest({

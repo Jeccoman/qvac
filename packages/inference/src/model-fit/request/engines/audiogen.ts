@@ -44,10 +44,6 @@ function minimaxFitRequest(
     engine: MINIMAX,
     lmPath,
     synthPath,
-    ...(config.coremlProfileDir !== undefined && { coremlProfileDir: config.coremlProfileDir }),
-    ...(config.coremlComputeUnits !== undefined && {
-      coremlComputeUnits: config.coremlComputeUnits
-    }),
     ...(config.device !== undefined
       ? { device: config.device }
       : { gpuLayers: gpuLayersFromGate(config.useGPU) }),

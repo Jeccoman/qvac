@@ -1,11 +1,5 @@
 import { writeFileSync } from 'node:fs'
-import {
-  audioGen,
-  loadModel,
-  unloadModel,
-  type AudioGenRuntimeConfig,
-  type ModelProgressUpdate
-} from '@qvac/sdk'
+import { audioGen, loadModel, unloadModel, type ModelProgressUpdate } from '@qvac/sdk'
 
 // Usage:
 //   AUDIOGEN_MINIMAX_LM_MODEL=/models/mm3-lm-q8.gguf \
@@ -29,7 +23,6 @@ try {
       lmModelSrc: requiredModelPath('AUDIOGEN_MINIMAX_LM_MODEL'),
       synthModelSrc: requiredModelPath('AUDIOGEN_MINIMAX_SYNTH_MODEL'),
       useGPU: process.env['AUDIOGEN_USE_GPU'] === '1',
-      ...coremlConfigFromEnv(),
       ...(threads !== undefined && { threads })
     },
     onProgress: function (progress: ModelProgressUpdate) {
@@ -78,27 +71,6 @@ try {
   }
   console.error('✖', error)
   process.exit(1)
-}
-
-function coremlConfigFromEnv(): Pick<
-  Extract<AudioGenRuntimeConfig, { engine: 'minimax' }>,
-  'coremlProfileDir' | 'coremlComputeUnits'
-> {
-  const coremlProfileDir = process.env['AUDIOGEN_COREML_PROFILE_DIR']
-  const coremlComputeUnits = process.env['AUDIOGEN_COREML_COMPUTE_UNITS']
-  if (coremlProfileDir === undefined && coremlComputeUnits === undefined) return {}
-  if (!coremlProfileDir) throw new Error('AUDIOGEN_COREML_PROFILE_DIR is required for Core ML')
-  if (
-    coremlComputeUnits !== 'CPU_ONLY' &&
-    coremlComputeUnits !== 'CPU_AND_GPU' &&
-    coremlComputeUnits !== 'CPU_AND_NE' &&
-    coremlComputeUnits !== 'ALL'
-  ) {
-    throw new Error(
-      'AUDIOGEN_COREML_COMPUTE_UNITS must be CPU_ONLY, CPU_AND_GPU, CPU_AND_NE or ALL'
-    )
-  }
-  return { coremlProfileDir, coremlComputeUnits }
 }
 
 function requiredModelPath(name: string) {

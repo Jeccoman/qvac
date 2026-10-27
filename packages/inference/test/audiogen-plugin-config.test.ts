@@ -1,5 +1,4 @@
 import test from 'brittle'
-import os from 'bare-os'
 import { AudioGen, ENGINE_ACESTEP, ENGINE_MINIMAX } from '@qvac/audiogen-ggml'
 import { ModelLoadFailedError } from '@/errors/index'
 import { resolveAudioGenConfig } from '@/plugins/builtin/audiogen-ggml/config'
@@ -239,47 +238,4 @@ test('AudioGen load config survives device-default resolution', (t) => {
   )
 
   t.alike(resolved, config)
-})
-
-test('MiniMax resolves Core ML host paths unchanged and forwards the policy to the addon', async (t) => {
-  const resolved = await resolveAudioGenConfig(
-    {
-      engine: 'minimax',
-      lmModelSrc: 'lm.gguf',
-      synthModelSrc: 'synth.gguf',
-      coremlProfileDir: '/models/Core ML profile',
-      coremlComputeUnits: 'CPU_AND_NE'
-    },
-    {
-      modelSrc: '',
-      modelType: 'audiogen-ggml',
-      platform: 'darwin',
-      resolveModelPath: async (source) =>
-        `/resolved/${typeof source === 'string' ? source : source.src}`
-    }
-  )
-  t.alike(resolved.config, {
-    engine: 'minimax',
-    coremlProfileDir: '/models/Core ML profile',
-    coremlComputeUnits: 'CPU_AND_NE'
-  })
-  const originalPlatform = os.platform
-  os.platform = () => 'darwin'
-  try {
-    const { model } = audioGenPlugin.createModel({
-      modelId: 'coreml-minimax',
-      modelPath: '',
-      modelConfig: resolved.config,
-      artifacts: resolved.artifacts
-    })
-    const native = (
-      model as unknown as {
-        _configuration: { coremlProfileDir: string; coremlComputeUnits: string }
-      }
-    )._configuration
-    t.is(native.coremlProfileDir, '/models/Core ML profile')
-    t.is(native.coremlComputeUnits, 'CPU_AND_NE')
-  } finally {
-    os.platform = originalPlatform
-  }
 })

@@ -1,11 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-### Added
-
-- Expose MiniMax Core ML profile and device-policy fields in `qvac configure` and `qvac serve` through the SDK configuration schema.
-
 ## [0.16.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.16.0

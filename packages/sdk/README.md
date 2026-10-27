@@ -264,46 +264,6 @@ console.log(text, stats?.encoderUsedCoreml)
 `call.stats` resolves to `undefined` when the engine reports no statistics and
 rejects if transcription fails.
 
-## MiniMax Core ML and ANE on macOS
-
-The AudioGen load config exposes the full MiniMax Core ML runtime on macOS 15+:
-
-```ts
-const modelId = await loadModel({
-  modelType: 'audiogen',
-  modelConfig: {
-    engine: 'minimax',
-    lmModelSrc: '/models/mm3-lm-f16.gguf',
-    synthModelSrc: '/models/mm3-synth-f16.gguf',
-    coremlProfileDir: '/models/minimax-coreml',
-    coremlComputeUnits: 'CPU_AND_NE'
-  }
-})
-const run = audioGen({ modelId, caption: 'Warm piano with gentle strings', maxFrames: 150 })
-const audio = await run.audio
-await unloadModel({ modelId })
-```
-
-Import these functions from `@qvac/sdk`. Both Core ML options are required
-together; no device policy is selected implicitly. Allowed values are
-`CPU_ONLY`, `CPU_AND_GPU`, `CPU_AND_NE`, and `ALL`. They describe the devices
-Core ML may use, not measured ANE placement. The directory is on the machine
-running inference and contains the matching F16 profile's manifest and compiled
-programs; it is not downloaded from `coremlProfileDir`. The macOS addon must be
-built with `speech-cpp[audiogen]`, which includes the full Core ML runtime on macOS.
-
-Generation and cancellation use the normal SDK APIs. Models remain loaded until
-`unloadModel()`. An explicit Core ML load error is reported without native
-fallback. Initial CPU/ANE numerical parity remains under validation; this route
-does not promise identical sampled audio or better speed. See the
-[addon guide](../audiogen-ggml/README.md#minimax-full-core-ml-on-macos) for profile
-compatibility, fit diagnostics, and backend reporting.
-
-The existing [MiniMax example](examples/audiogen/generate-music-minimax.ts)
-accepts `AUDIOGEN_COREML_PROFILE_DIR` and `AUDIOGEN_COREML_COMPUTE_UNITS`.
-The same config fields are available in `qvac configure` and `qvac serve` model
-entries; see the [CLI example](../cli/README.md#minimax-core-ml).
-
 ## Parakeet Core ML encoders on Apple devices
 
 Load a supported Parakeet registry constant as usual. On macOS and iOS, the SDK

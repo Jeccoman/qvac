@@ -38,7 +38,6 @@
 **QVAC** lets you run a comprehensive range of AI workloads locally using open models across Linux, macOS, Windows, Android, and iOS.
 
 QVAC provides:
-
 - **SDK** for building local-first AI applications and systems in JavaScript/TypeScript and Python.
 - **HTTP server** for using QVAC as a local model provider. Its OpenAI-compatible API lets you connect AI tools such as OpenCode and OpenClaw, or any other compatible tool.
 
@@ -49,11 +48,6 @@ QVAC provides:
 - **One SDK, all of AI:** a comprehensive range of AI capabilities through one interface.
 - **Cross-platform:** one codebase for Linux, macOS, Windows, Android, and iOS, using JavaScript/TypeScript or Python.
 - **Peer-to-peer:** fetch AI models directly between peers and build unstoppable internet systems, like BitTorrent or IPFS, but for AI.
-
-MiniMax AudioGen exposes a full Core ML route on macOS 15+ through the SDK's
-`coremlProfileDir` and `coremlComputeUnits` load configuration, including
-CPU + ANE and all-device policies. See the [SDK guide](packages/sdk/README.md#minimax-core-ml-and-ane-on-macos)
-for the compiled profile, build feature, and generation example.
 
 ## Quickstart
 
@@ -92,12 +86,7 @@ npm i @qvac/sdk
 4. Create the `quickstart.js` script:
 
 ```js
-import {
-  loadModel,
-  LLAMA_3_2_1B_INST_Q4_0,
-  completion,
-  unloadModel,
-} from "@qvac/sdk";
+import { loadModel, LLAMA_3_2_1B_INST_Q4_0, completion, unloadModel } from '@qvac/sdk';
 try {
   const modelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
@@ -105,19 +94,17 @@ try {
       const mb = (n) => (n / 1e6).toFixed(1);
       const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
       process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
-      if (p.percentage >= 100) process.stderr.write("\n");
+      if (p.percentage >= 100) process.stderr.write('\n');
     },
   });
-  const history = [
-    { role: "user", content: "Explain quantum computing in one sentence" },
-  ];
+  const history = [{ role: 'user', content: 'Explain quantum computing in one sentence' }];
   const result = completion({ modelId, history, stream: true });
   for await (const token of result.tokenStream) {
     process.stdout.write(token);
   }
   await unloadModel({ modelId });
 } catch (error) {
-  console.error("✖", error);
+  console.error('✖', error);
   process.exit(1);
 }
 ```
@@ -227,7 +214,6 @@ npm install -g @qvac/cli
 ```
 
 2. Create the examples workspace:
-
 ```bash
 mkdir qvac-server
 cd qvac-server
@@ -279,7 +265,7 @@ The response comes back as a single JSON payload with the model's answer. Add `"
 
 <br>
 
-> ⭐ If QVAC saves you from shipping yet another cloud dependency, give it a star, it helps other developers find the project!
+> ⭐  If QVAC saves you from shipping yet another cloud dependency, give it a star, it helps other developers find the project!
 
 ## AI capabilities
 
@@ -314,17 +300,17 @@ QVAC's built-in P2P capabilities let you build unstoppable internet systems with
 
 Explore and use QVAC:
 
-| Resource                                                                            | Description                                                                                                                                                |
-| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [**Docs**](https://docs.qvac.tether.io)                                             | Comprehensive QVAC documentation.                                                                                                                          |
-| [**Examples**](https://github.com/tetherto/qvac-examples/)                          | Sample apps and PoCs built with QVAC SDK.                                                                                                                  |
-| [**Local model provider**](https://docs.qvac.tether.io/cli/http-server/connection/) | Use QVAC as a local model provider connected to your favorite AI tools.                                                                                    |
-| [**QV.AC**](https://qv.ac)                                                          | Get to know our local AI assistant.                                                                                                                        |
-| **Support and community**                                                           | We gather on [Discord](https://discord.com/invite/tetherdev) and [Keet](https://docs.qvac.tether.io/keet/). Ask for help, give feedback, and discuss QVAC. |
-| [**Blog**](https://qvac.tether.io/blog/)                                            | Tutorials, deep dives, engineering notes, and announcements.                                                                                               |
-| [**Ecosystem**](https://qvac.tether.io)                                             | Discover the broader QVAC ecosystem.                                                                                                                       |
-| [**Research**](https://huggingface.co/qvac)                                         | Papers, datasets, and models optimized for edge devices.                                                                                                   |
-| [**Our vision**](https://docs.qvac.tether.io/about/vision/)                         | Learn why Tether built QVAC.                                                                                                                               |
+| Resource | Description |
+| --- | --- |
+| [**Docs**](https://docs.qvac.tether.io) | Comprehensive QVAC documentation. |
+| [**Examples**](https://github.com/tetherto/qvac-examples/) | Sample apps and PoCs built with QVAC SDK. |
+| [**Local model provider**](https://docs.qvac.tether.io/cli/http-server/connection/) | Use QVAC as a local model provider connected to your favorite AI tools. |
+| [**QV.AC**](https://qv.ac) | Get to know our local AI assistant. |
+| **Support and community** | We gather on [Discord](https://discord.com/invite/tetherdev) and [Keet](https://docs.qvac.tether.io/keet/). Ask for help, give feedback, and discuss QVAC. |
+| [**Blog**](https://qvac.tether.io/blog/) | Tutorials, deep dives, engineering notes, and announcements. |
+| [**Ecosystem**](https://qvac.tether.io) | Discover the broader QVAC ecosystem. |
+| [**Research**](https://huggingface.co/qvac) | Papers, datasets, and models optimized for edge devices. |
+| [**Our vision**](https://docs.qvac.tether.io/about/vision/) | Learn why Tether built QVAC. |
 
 ## Contributing
 

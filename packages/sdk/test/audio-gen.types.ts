@@ -250,19 +250,3 @@ void arMs
 
 const decodeSeed: number = recovered.seed
 void decodeSeed
-
-const coremlConfig: AudioGenConfig = {
-  engine: 'minimax',
-  lmModelSrc: '/models/lm.gguf',
-  synthModelSrc: '/models/synth.gguf',
-  coremlProfileDir: '/models/coreml',
-  coremlComputeUnits: 'CPU_AND_NE'
-}
-void coremlConfig
-const invalidCoreMLConfig: AudioGenRuntimeConfig = {
-  engine: 'minimax',
-  coremlProfileDir: '/models/coreml',
-  // @ts-expect-error Apple does not offer a GPU_ONLY Core ML policy
-  coremlComputeUnits: 'GPU_ONLY'
-}
-void invalidCoreMLConfig

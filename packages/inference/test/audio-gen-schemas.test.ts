@@ -1094,36 +1094,3 @@ test('audioUnderstandResponseSchema streams the description and repeats it on st
     'the reverse pipeline never carries PCM'
   )
 })
-
-test('MiniMax Core ML validates both load and reload config without selecting a default', (t) => {
-  const pair = { lmModelSrc: 'lm.gguf', synthModelSrc: 'synth.gguf' }
-  for (const coremlComputeUnits of ['CPU_ONLY', 'CPU_AND_GPU', 'CPU_AND_NE', 'ALL']) {
-    const config = { engine: 'minimax', coremlProfileDir: '/models/coreml', coremlComputeUnits }
-    t.alike(audioGenRuntimeConfigSchema.parse(config), config)
-    t.alike(audioGenConfigSchema.parse({ ...config, ...pair }), { ...config, ...pair })
-    const request = loadModelOptionsToRequestSchema.parse({
-      modelType: 'audiogen',
-      modelConfig: { ...config, ...pair }
-    })
-    t.alike(request.modelConfig, { ...config, ...pair })
-  }
-  t.alike(audioGenRuntimeConfigSchema.parse({ engine: 'minimax' }), { engine: 'minimax' })
-  for (const invalid of [
-    { coremlProfileDir: '/models/coreml' },
-    { coremlComputeUnits: 'ALL' },
-    { coremlProfileDir: '', coremlComputeUnits: 'ALL' },
-    { coremlProfileDir: '/models/\0coreml', coremlComputeUnits: 'ALL' },
-    { coremlProfileDir: '/models/coreml', coremlComputeUnits: 'GPU_ONLY' }
-  ]) {
-    t.is(audioGenRuntimeConfigSchema.safeParse({ engine: 'minimax', ...invalid }).success, false)
-    t.is(audioGenConfigSchema.safeParse({ engine: 'minimax', ...pair, ...invalid }).success, false)
-  }
-  t.is(
-    audioGenConfigSchema.safeParse({
-      ...modelConfig,
-      coremlProfileDir: '/models/coreml',
-      coremlComputeUnits: 'ALL'
-    }).success,
-    false
-  )
-})

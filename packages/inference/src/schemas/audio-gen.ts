@@ -162,52 +162,23 @@ const minimaxRuntimeConfigShape = {
     .describe(
       "Where MiniMax runs, instead of `useGPU`: `'gpu'` requires a usable GPU and fails the load otherwise, `'auto'` (what `useGPU: true` means) falls back to the CPU, `'cpu'` never touches a GPU. Cannot be combined with `useGPU`."
     ),
-  coremlProfileDir: z
-    .string()
-    .min(1)
-    .refine((value) => !value.includes('\0'), {
-      message: 'Core ML profile path contains a null character'
-    })
-    .optional()
-    .describe(
-      'MiniMax only: compiled full Core ML profile directory on the inference host, macOS 15+. Requires coremlComputeUnits.'
-    ),
-  coremlComputeUnits: z
-    .enum(['CPU_ONLY', 'CPU_AND_GPU', 'CPU_AND_NE', 'ALL'])
-    .optional()
-    .describe(
-      'MiniMax only: allowed Core ML devices, chosen explicitly. Requires coremlProfileDir. This policy takes precedence over native device/useGPU selection.'
-    ),
   inferenceSteps: inferenceStepsSchema
     .optional()
     .describe('MiniMax flow sampling steps; `0` uses the engine default (20).'),
   cfgScale: minimaxCfgScaleSchema.optional()
 }
 
-/** Preserve the native device choice and require the explicit Core ML option pair. */
-function refineMinimaxConfig(
-  value: {
-    useGPU?: boolean | undefined
-    device?: string | undefined
-    coremlProfileDir?: string | undefined
-    coremlComputeUnits?: string | undefined
-  },
+/** The addon takes `useGPU` or `device` for MiniMax, never both. */
+function refineMinimaxDevice(
+  value: { useGPU?: boolean | undefined; device?: string | undefined },
   ctx: z.RefinementCtx
 ) {
-  if (value.device !== undefined && value.useGPU !== undefined) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['device'],
-      message: 'MiniMax accepts either useGPU or device, not both'
-    })
-  }
-  if ((value.coremlProfileDir === undefined) !== (value.coremlComputeUnits === undefined)) {
-    ctx.addIssue({
-      code: 'custom',
-      path: [value.coremlProfileDir === undefined ? 'coremlProfileDir' : 'coremlComputeUnits'],
-      message: 'MiniMax Core ML requires both coremlProfileDir and coremlComputeUnits'
-    })
-  }
+  if (value.device === undefined || value.useGPU === undefined) return
+  ctx.addIssue({
+    code: 'custom',
+    path: ['device'],
+    message: 'MiniMax accepts either useGPU or device, not both'
+  })
 }
 
 const acestepAudioGenRuntimeConfigSchema = z
@@ -222,16 +193,10 @@ const minimaxEngineShape = {
   ...minimaxRuntimeConfigShape
 }
 
-const minimaxCoreMLDependencies = {
-  coremlProfileDir: ['coremlComputeUnits'],
-  coremlComputeUnits: ['coremlProfileDir']
-}
-
 const minimaxAudioGenRuntimeConfigSchema = z
   .object(minimaxEngineShape)
   .strict()
-  .superRefine(refineMinimaxConfig)
-  .meta({ dependentRequired: minimaxCoreMLDependencies })
+  .superRefine(refineMinimaxDevice)
 
 export const audioGenRuntimeConfigSchema = z.discriminatedUnion('engine', [
   acestepAudioGenRuntimeConfigSchema,
@@ -266,8 +231,7 @@ const minimaxAudioGenConfigSchema = z
     )
   })
   .strict()
-  .superRefine(refineMinimaxConfig)
-  .meta({ dependentRequired: minimaxCoreMLDependencies })
+  .superRefine(refineMinimaxDevice)
 
 export const audioGenConfigSchema = z.discriminatedUnion('engine', [
   acestepAudioGenConfigSchema,

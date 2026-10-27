@@ -20793,17 +20793,6 @@
                           "enum": ["cpu", "gpu", "auto"],
                           "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxDevice"
                         },
-                        "coremlProfileDir": {
-                          "description": "MiniMax only: compiled full Core ML profile directory on the inference host, macOS 15+. Requires coremlComputeUnits.",
-                          "type": "string",
-                          "minLength": 1
-                        },
-                        "coremlComputeUnits": {
-                          "description": "MiniMax only: allowed Core ML devices, chosen explicitly. Requires coremlProfileDir. This policy takes precedence over native device/useGPU selection.",
-                          "type": "string",
-                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
-                          "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxCoremlComputeUnits"
-                        },
                         "inferenceSteps": {
                           "description": "MiniMax flow sampling steps; `0` uses the engine default (20).",
                           "type": "integer",
@@ -21015,10 +21004,6 @@
                       },
                       "required": ["engine", "lmModelSrc", "synthModelSrc"],
                       "additionalProperties": false,
-                      "dependentRequired": {
-                        "coremlProfileDir": ["coremlComputeUnits"],
-                        "coremlComputeUnits": ["coremlProfileDir"]
-                      },
                       "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimax"
                     }
                   ]

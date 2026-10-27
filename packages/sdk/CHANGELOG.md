@@ -1,11 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-### Added
-
-- Expose the full MiniMax Core ML load configuration (`coremlProfileDir` and explicit `coremlComputeUnits`) through AudioGen, including CPU + ANE on macOS 15+.
-
 ## [0.22.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.22.0

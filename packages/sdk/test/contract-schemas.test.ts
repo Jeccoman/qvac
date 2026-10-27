@@ -309,26 +309,3 @@ test('contract finetune.response: validates terminal stats payload', (t) => {
   const contract = contractValidate('finetune.response', terminal)
   t.ok(contract.valid, `contract accepts terminal stats payload: ${contract.errors}`)
 })
-
-test('contract MiniMax Core ML exposes each policy and requires the profile-policy pair', (t) => {
-  const document: unknown = JSON.parse(
-    readFileSync(new URL('../contract/schema.json', import.meta.url), 'utf8')
-  )
-  const schema = findSchemaTitle(document, 'LoadModelSrcRequestAudiogenGgmlModelConfigMinimax')
-  t.ok(schema)
-  if (!schema) return
-  const validate = new Ajv2020({ strict: false }).compile(schema)
-  const files = { engine: 'minimax', lmModelSrc: 'lm.gguf', synthModelSrc: 'synth.gguf' }
-  t.ok(validate(files))
-  for (const coremlComputeUnits of ['CPU_ONLY', 'CPU_AND_GPU', 'CPU_AND_NE', 'ALL']) {
-    t.ok(validate({ ...files, coremlProfileDir: '/models/coreml', coremlComputeUnits }))
-  }
-  for (const invalid of [
-    { coremlComputeUnits: 'ALL' },
-    { coremlProfileDir: '/models/coreml' },
-    { coremlProfileDir: '', coremlComputeUnits: 'ALL' },
-    { coremlProfileDir: '/models/coreml', coremlComputeUnits: 'GPU_ONLY' }
-  ]) {
-    t.is(validate({ ...files, ...invalid }), false)
-  }
-})

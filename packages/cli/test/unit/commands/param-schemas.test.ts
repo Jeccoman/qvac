@@ -97,48 +97,6 @@ describe('configure: param-schemas', () => {
     assert.notEqual(validateParam(streamLayers, 'yes'), true)
   })
 
-  it('exposes MiniMax Core ML profile and policies in configure', () => {
-    const schema = configSchemaForAddon('audiogen')
-    assert.ok(schema)
-    const model = configParamModel(schema)
-    assert.equal(model?.kind, 'variants')
-    if (model?.kind !== 'variants') return
-    const minimax = model.variants.find((variant) => variant.value === 'minimax')
-    assert.ok(minimax)
-    const units = minimax.fields.find((field) => field.name === 'coremlComputeUnits')
-    const profile = minimax.fields.find((field) => field.name === 'coremlProfileDir')
-    assert.ok(units)
-    assert.ok(profile)
-    assert.equal(units.default, undefined)
-    for (const policy of ['CPU_ONLY', 'CPU_AND_GPU', 'CPU_AND_NE', 'ALL']) {
-      assert.equal(validateParam(units, policy), true)
-      assert.equal(
-        schema.safeParse({
-          engine: 'minimax',
-          lmModelSrc: 'lm.gguf',
-          synthModelSrc: 'synth.gguf',
-          coremlProfileDir: '/models/coreml',
-          coremlComputeUnits: policy
-        }).success,
-        true
-      )
-    }
-    assert.notEqual(validateParam(units, 'GPU_ONLY'), true)
-    assert.equal(validateParam(profile, ''), true)
-    assert.equal(coerceParam('', profile), undefined)
-    assert.equal(
-      schema.safeParse({
-        engine: 'minimax',
-        lmModelSrc: 'lm.gguf',
-        synthModelSrc: 'synth.gguf',
-        coremlComputeUnits: 'ALL'
-      }).success,
-      false
-    )
-    const acestep = model.variants.find((variant) => variant.value === 'acestep')
-    assert.ok(!acestep?.fields.some((field) => field.name === 'coremlComputeUnits'))
-  })
-
   it('resolves a config schema for every built-in addon', () => {
     // Addon strings are model-type aliases; the SDK resolves each to its schema,
     // so a new addon is documented without wiring anything here.

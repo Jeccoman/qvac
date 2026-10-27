@@ -41,18 +41,6 @@ complete bundle and downloads it with the GGUF, preserving the directory layout
 the addon expects. Without a complete bundle, and on every other platform, the
 GGUF loads on its own.
 
-## MiniMax full Core ML profiles
-
-The MiniMax AudioGen config accepts the explicit pair `coremlProfileDir` and
-`coremlComputeUnits` (`CPU_ONLY`, `CPU_AND_GPU`, `CPU_AND_NE`, or `ALL`).
-`coremlProfileDir` is a host-local directory containing the matching F16 profile's
-`manifest.json` and compiled full-network programs. It is forwarded unchanged
-to the addon, independently of the LM and synthesis model sources. It is not a
-registry source or an automatically staged companion set. macOS 15+ and the
-MiniMax-specific native Core ML build feature are required. Load and reload
-validate the same option pair. Fit passes both fields to the native fitter,
-which reports `coreml-memory-estimate-unavailable` rather than a GGML projection.
-
 ## CosyVoice3 companion sets
 
 Load the lighter set with `TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0` as `modelSrc`,

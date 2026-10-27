@@ -1,11 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-### Added
-
-- Forward the explicit MiniMax Core ML profile and device-policy pair through load, reload, and memory-fit requests; validate the same pair in the public contract.
-
 ## [0.22.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/inference/v/0.22.0

@@ -15,12 +15,6 @@ The Bare-only engine of the QVAC SDK. It runs inference directly on the [Bare ru
 
 `@qvac/inference` ships no plugins by default and has no required model or RPC server addon dependencies. Model addons are optional peers; RPC serving uses an explicitly registered provider. You install only the addon packages your app registers, so the resulting binary scales with the engines and services you actually assemble.
 
-MiniMax AudioGen exposes full Core ML on macOS 15+ through the explicit
-`coremlProfileDir` and `coremlComputeUnits` config pair. The compiled profile
-stays on the inference host; LM and synthesis sources keep their normal
-resolution. See [profile ownership](docs/model-sources.md#minimax-full-core-ml-profiles)
-and the [SDK example](../sdk/README.md#minimax-core-ml-and-ane-on-macos).
-
 ## Requirements
 
 - A Bare runtime (see the `bare` version in `engines`). The package ships compiled JavaScript with type declarations; when working from source, run `npm run build` first.

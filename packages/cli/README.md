@@ -500,40 +500,6 @@ This file is primarily the SDK runtime config, but `qvac bundle sdk` also reads 
 }
 ```
 
-### MiniMax Core ML
-
-In `qvac configure`, select the AudioGen `minimax` variant and set both
-`coremlProfileDir` and `coremlComputeUnits`. The editor lists the four Apple
-policies: `CPU_ONLY`, `CPU_AND_GPU`, `CPU_AND_NE`, and `ALL`.
-
-A model entry for `qvac serve` uses the same config:
-
-```json
-{
-  "serve": {
-    "models": {
-      "minimax-coreml": {
-        "type": "audiogen",
-        "src": "/models/mm3-lm-f16.gguf",
-        "config": {
-          "engine": "minimax",
-          "lmModelSrc": "/models/mm3-lm-f16.gguf",
-          "synthModelSrc": "/models/mm3-synth-f16.gguf",
-          "coremlProfileDir": "/models/minimax-coreml",
-          "coremlComputeUnits": "CPU_AND_NE"
-        }
-      }
-    }
-  }
-}
-```
-
-Run `qvac serve` from the directory containing this `qvac.config.json`.
-The compiled profile directory must exist on the macOS 15+ inference host and
-match the F16 GGUF pair. The addon needs the separate MiniMax Core ML feature.
-These fields do not change the CLI's other model entries or download a profile.
-See the [SDK guide](../sdk/README.md#minimax-core-ml-and-ane-on-macos) for usage.
-
 ## System Requirements
 
 See [`system-requirements.md`](./system-requirements.md) for the full list of

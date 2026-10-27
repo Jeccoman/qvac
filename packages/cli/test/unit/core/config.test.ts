@@ -11,21 +11,6 @@ import { resolveExplicitServeModel, resolveModelConstant } from '@/serve/core/co
 import { resolveNestedModelSrcConstants } from '@/serve/core/config/nested-model-src'
 
 describe('resolveExplicitServeModel', () => {
-  it('passes the full MiniMax Core ML configuration from serve to the SDK', () => {
-    const config = {
-      engine: 'minimax',
-      lmModelSrc: '/models/lm.gguf',
-      synthModelSrc: '/models/synth.gguf',
-      coremlProfileDir: '/models/coreml',
-      coremlComputeUnits: 'CPU_AND_NE'
-    }
-    assert.deepEqual(resolveExplicitServeModel('audiogen', config), {
-      sdkType: 'audiogen',
-      endpointCategory: 'audiogen',
-      config
-    })
-  })
-
   it('routes the decisions model type to its own endpoint category', () => {
     assert.deepEqual(resolveExplicitServeModel('llamacpp-decision', { device: 'gpu' }), {
       sdkType: 'llamacpp-decision',
