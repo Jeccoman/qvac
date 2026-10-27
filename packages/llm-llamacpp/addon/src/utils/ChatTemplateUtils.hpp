@@ -183,8 +183,12 @@ struct PromptRenderResult {
  *
  * On a tools-stripped retry `inputs.tools` is cleared so callers never see a
  * tool list the prompt does not carry. Dropped tools and the legacy fallback
- * are logged at ERROR, or at DEBUG when @p forRequest is false because the
- * render only measures a prompt.
+ * are logged at ERROR.
+ *
+ * With @p forRequest false the render only measures a prompt: those logs drop
+ * to DEBUG, and the second render that checks whether a successful render
+ * left the tools out is skipped, so `toolDefinitionsDropped` then reports
+ * only a template that rejected the tools or the legacy renderer.
  */
 PromptRenderResult getPrompt(
     const struct common_chat_templates* tmpls,

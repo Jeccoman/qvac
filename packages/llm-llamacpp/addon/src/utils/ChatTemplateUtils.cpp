@@ -415,7 +415,7 @@ PromptRenderResult getPrompt(
     // tools-aware render.
     const bool legacyDroppedTools = !inputs.use_jinja && !inputs.tools.empty();
     const bool jinjaOmittedTools =
-        inputs.use_jinja && !inputs.tools.empty() &&
+        forRequest && inputs.use_jinja && !inputs.tools.empty() &&
         jinjaRenderOmittedTools(tmpls, inputs, params.prompt);
     const bool droppedTools = legacyDroppedTools || jinjaOmittedTools;
     if (jinjaOmittedTools) {
