@@ -68,7 +68,6 @@ void applyGenerationOverridesToSampling(
   // composition was never possible and was reverted.
   bool installedGrammar = false;
   if (overrides.json_schema) {
-    using qvac_lib_inference_addon_llama::utils::K_MAX_JSON_DEPTH;
     if (qvac_lib_inference_addon_llama::utils::nestsTooDeep(
             *overrides.json_schema)) {
       throw qvac_errors::StatusError(
@@ -76,7 +75,9 @@ void applyGenerationOverridesToSampling(
           qvac_errors::general_error::toString(
               qvac_errors::general_error::InvalidArgument),
           "invalid generationParams.json_schema: nests deeper than " +
-              std::to_string(K_MAX_JSON_DEPTH) + " levels");
+              std::to_string(
+                  qvac_lib_inference_addon_llama::utils::K_MAX_JSON_DEPTH) +
+              " levels");
     }
     try {
       auto parsed = common_json::parse(*overrides.json_schema);

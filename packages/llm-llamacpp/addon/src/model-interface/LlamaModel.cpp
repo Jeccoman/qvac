@@ -1943,18 +1943,16 @@ ParsedPromptPayload parsePromptPayload(
     const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>&
         reasoningTags,
     const std::function<void()>& resetMedia, bool requireObjects = false) {
-  const char* kParseTag = K_PROMPT_PARSE_TAG.data();
+  const char* const parseTag = K_PROMPT_PARSE_TAG.data();
   if (input.empty()) {
     resetMedia();
-    std::string errorMsg = string_format("%s: empty prompt\n", kParseTag);
+    std::string errorMsg = string_format("%s: empty prompt\n", parseTag);
     throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
   }
   if (nestsTooDeep(input)) {
     resetMedia();
     std::string errorMsg = string_format(
-        "%s: input nests deeper than %zu levels\n",
-        kParseTag,
-        K_MAX_JSON_DEPTH);
+        "%s: input nests deeper than %zu levels\n", parseTag, K_MAX_JSON_DEPTH);
     throw qvac_errors::StatusError(
         ADDON_ID, toString(InvalidInputFormat), errorMsg);
   }
@@ -1976,7 +1974,7 @@ ParsedPromptPayload parsePromptPayload(
            isObject))) {
     resetMedia();
     std::string errorMsg =
-        string_format("%s: input must be a JSON array of objects\n", kParseTag);
+        string_format("%s: input must be a JSON array of objects\n", parseTag);
     throw qvac_errors::StatusError(
         ADDON_ID, toString(InvalidInputFormat), errorMsg);
   }
@@ -1992,8 +1990,10 @@ ParsedPromptPayload parsePromptPayload(
       // array, raw invalid UTF-8, numbers like `01`.
       QLOG_IF(
           Priority::DEBUG,
-          "[LlamaModel] formatPrompt: request is not strict JSON, so tool "
-          "schemas and call arguments keep sorted key order\n");
+          string_format(
+              "[LlamaModel] %s: request is not strict JSON, so tool schemas "
+              "and call arguments keep sorted key order\n",
+              parseTag));
     }
 
     int addMediaPlaceholder = 0;
@@ -2044,7 +2044,7 @@ ParsedPromptPayload parsePromptPayload(
         }
         if (!contentMissing && !contentIt->second.is<std::string>()) {
           std::string errorMsg =
-              string_format("%s: content must be a string\n", kParseTag);
+              string_format("%s: content must be a string\n", parseTag);
           throw qvac_errors::StatusError(
               ADDON_ID, toString(InvalidInputFormat), errorMsg);
         }
@@ -2081,7 +2081,7 @@ ParsedPromptPayload parsePromptPayload(
           std::string errorMsg = string_format(
               "%s: Must append a user question after loading "
               "media\n",
-              kParseTag);
+              parseTag);
           throw qvac_errors::StatusError(
               ADDON_ID, toString(UserMessageNotProvided), errorMsg);
         }
@@ -2106,7 +2106,7 @@ ParsedPromptPayload parsePromptPayload(
     if (addMediaPlaceholder > 0) {
       resetMedia();
       std::string errorMsg =
-          string_format("%s: No request for media was made\n", kParseTag);
+          string_format("%s: No request for media was made\n", parseTag);
       throw qvac_errors::StatusError(
           ADDON_ID, toString(MediaRequestNotProvided), errorMsg);
     }
@@ -2114,7 +2114,7 @@ ParsedPromptPayload parsePromptPayload(
   if (!err.empty()) {
     resetMedia();
     std::string errorMsg =
-        string_format("%s: Invalid input format: %s\n", kParseTag, err.c_str());
+        string_format("%s: Invalid input format: %s\n", parseTag, err.c_str());
     throw qvac_errors::StatusError(
         ADDON_ID, toString(InvalidInputFormat), errorMsg);
   }
