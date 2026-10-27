@@ -3,8 +3,10 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 
 #include <gtest/gtest.h>
@@ -22,13 +24,11 @@ inline double getStatValue(
     if (stat.first == key) {
       return std::visit(
           [](const auto& value) -> double {
-            if constexpr (std::is_same_v<
-                              std::decay_t<decltype(value)>,
-                              double>) {
+            if constexpr (
+                std::is_same_v<std::decay_t<decltype(value)>, double>) {
               return value;
-            } else if constexpr (std::is_same_v<
-                                     std::decay_t<decltype(value)>,
-                                     int64_t>) {
+            } else if constexpr (
+                std::is_same_v<std::decay_t<decltype(value)>, int64_t>) {
               return static_cast<double>(value);
             } else {
               return 0.0;
@@ -132,8 +132,7 @@ struct BaseTestModelPath {
  * Construction resolves the path once: it checks @p envVar first, then
  * looks for @p filename under BaseTestModelPath. When @p isSharded is true
  * the shard list is also expanded via GGUFShards::expandGGUFIntoShards().
- * Callers that need absolute shard paths should call
- * LlamaModel::resolveShardPaths(model.shards, model.path) after construction.
+ * Shard fixture paths are resolved relative to the first shard's directory.
  *
  * Use REQUIRE_MODEL() in the test body to skip or fail automatically when
  * the model is absent.
@@ -146,7 +145,6 @@ struct BaseTestModelPath {
  * Sharded example:
  *   TestModelPath m("my-model-00001-of-00008.gguf", "MY_SHARD_PATH",
  *                   TestModelPath::OnMissing::Skip, "https://...", true);
- *   LlamaModel::resolveShardPaths(m.shards, m.path);  // resolve absolute paths
  */
 struct TestModelPath {
   enum class OnMissing { Fail, Skip };
@@ -157,7 +155,7 @@ struct TestModelPath {
   std::string hfUrl;   ///< HuggingFace URL shown in the diagnostic (may be "").
   OnMissing onMissing; ///< Whether to FAIL or GTEST_SKIP when absent.
   bool isSharded;      ///< True when the model is split across multiple files.
-  GGUFShards shards;   ///< Populated (without absolute paths) when isSharded.
+  GGUFShards shards;   ///< Absolute fixture paths when isSharded.
 
   TestModelPath() : onMissing(OnMissing::Skip), isSharded(false) {}
 
@@ -174,8 +172,14 @@ struct TestModelPath {
       if (fs::exists(p))
         path = p;
     }
-    if (isSharded && !path.empty())
+    if (isSharded && !path.empty()) {
       shards = GGUFShards::expandGGUFIntoShards(path);
+      const auto baseDir = fs::path(path).parent_path();
+      for (auto& shard : shards.gguf_files) {
+        shard = (baseDir / shard).string();
+      }
+      shards.tensors_file = (baseDir / shards.tensors_file).string();
+    }
   }
 
   /**

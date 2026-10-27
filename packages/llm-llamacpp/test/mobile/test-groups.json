@@ -17,6 +17,7 @@
     "lightA": [
       "runApiBehaviorTest",
       "runFitTest",
+      "runWeightLoadingTest",
       "runBitnetTest",
       "runCacheStateMachineTest",
       "runConfigParametersTest",
@@ -49,6 +50,7 @@
       "runFinetuningArchsTest"
     ],
     "funcShardB": [
+      "runWeightLoadingTest",
       "runKvCacheTypeDefaultsTest",
       "runCacheStateMachineTest",
       "runUnloadThrowingListenerTest"

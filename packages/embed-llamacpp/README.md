@@ -106,7 +106,7 @@ const args = {
 
 The `args` obj contains the following properties:
 
-* `files.model`: An array of absolute paths to the model file(s) on disk. For sharded models, provide all shard paths.
+* `files.model`: Exactly one absolute disk path: the single GGUF file or only the first shard. Fabric reads the remaining shards from the same directory.
 * `files.projectionModel` (optional): Absolute path to the projection model (mmproj) of a multimodal embedding model such as EmbeddingGemma 2. With it, `run()` also embeds images and audio (see [Embed images and audio](#embed-images-and-audio)).
 * `config`: A dictionary of hyper-parameters used to tweak the behaviour of the model (see [Create `config`](#3-create-config) below).
 * `logger`: This property is used to create a [`QvacLogger`](../logging) instance, which handles all logging functionality.
@@ -114,35 +114,24 @@ The `args` obj contains the following properties:
 
 #### Sharded model usage
 
-The addon does not discover companion files on disk — the caller MUST pass every file the model needs, in order, via `files.model`. For sharded GGUF models this includes the `.tensors.txt` companion file followed by each `.gguf` shard in numerical order.
+Models load from disk only. Pass exactly one absolute path in `files.model`:
+the single GGUF file, or the first shard (`*-00001-of-000NN.gguf`). All shards
+must already be in the same directory with their original names. Fabric reads
+the GGUF metadata, discovers the remaining shards and reads their weights.
+No JavaScript weight buffers or `.tensors.txt` file are needed.
+
+Passing multiple paths or weight buffers is rejected. Migrate an old all-files
+list to `[firstShardPath]`. The legacy `loadWeights()` method always rejects
+with `ERR_WEIGHT_STREAMING_UNSUPPORTED`; it does not forward buffers to Fabric.
+This removes model-weight streaming, while generated output still streams as before.
 
 ```js
-const path = require('bare-path')
-
-const dir = '/path/to/models'
 const model = new GGMLBert({
-  files: {
-    model: [
-      path.join(dir, 'gte-large.Q2_K.tensors.txt'),
-      path.join(dir, 'gte-large.Q2_K-00001-of-00005.gguf'),
-      path.join(dir, 'gte-large.Q2_K-00002-of-00005.gguf'),
-      path.join(dir, 'gte-large.Q2_K-00003-of-00005.gguf'),
-      path.join(dir, 'gte-large.Q2_K-00004-of-00005.gguf'),
-      path.join(dir, 'gte-large.Q2_K-00005-of-00005.gguf')
-    ]
-  },
-  config: { device: 'gpu', gpu_layers: '99' },
-  logger: console,
-  opts: { stats: true }
+  files: { model: ['/absolute/models/model-00001-of-00003.gguf'] },
+  config
 })
+await model.load()
 ```
-
-Rules for the `files.model` array:
-
-* **Order matters.** The `.tensors.txt` file must come first, then shards in ascending numerical order (`00001-of-00005`, `00002-of-00005`, ...).
-* **All shards are required.** Missing any shard or the `.tensors.txt` companion will fail loading.
-* **Non-sharded models** pass a single absolute path: `files: { model: [modelPath] }`.
-* **Absolute paths only.** The addon reads each file directly via `bare-fs` during `load()`.
 
 ### 3. Create `config`
 

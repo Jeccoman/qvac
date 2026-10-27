@@ -16,10 +16,6 @@ const SHARDED_MODEL = {
   embeddingDimension: 1024,
   files: [
     {
-      name: 'gte-large_fp16.tensors.txt',
-      size: 8966
-    },
-    {
       name: 'gte-large_fp16-00001-of-00005.gguf',
       size: 156815424
     },
@@ -91,7 +87,7 @@ safeTest(
     const modelFiles = await ensureShardedModel(modelDir)
 
     const addon = new GGMLBert({
-      files: { model: modelFiles },
+      files: { model: [modelFiles.find((file) => /-00001-of-\d{5}\.gguf$/.test(file))] },
       config: {
         device: 'cpu',
         gpu_layers: '0',

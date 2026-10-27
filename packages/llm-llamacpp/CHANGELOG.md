@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.66.0] - 2026-10-27
+
+### Breaking Changes
+
+- Removed model-weight streaming. `files.model` now accepts exactly one absolute
+  disk path: a single GGUF or only its first shard. All shards must already be
+  in the same directory. Multiple paths and weight buffers are rejected;
+  `loadWeights()` always rejects with `ERR_WEIGHT_STREAMING_UNSUPPORTED`.
+- Removed addon-side shard-name expansion. Fabric discovers and reads disk
+  shards from the first GGUF, preventing excessive allocation from a shard
+  count embedded in a filename. Tensor-name companion files are not needed.
+- Generated-token streaming, multimodal input, caching and finetuning remain
+  supported.
+
 ## [0.65.0] - 2026-10-27
 
 ### Changed

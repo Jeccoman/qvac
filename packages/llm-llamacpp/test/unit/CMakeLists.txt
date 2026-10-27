@@ -73,7 +73,6 @@ add_executable(
   temp_dir_env.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/LlmParsers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/LoadConfigHandlers.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheCheckpointFile.cpp

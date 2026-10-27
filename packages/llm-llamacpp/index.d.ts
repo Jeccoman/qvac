@@ -15,9 +15,8 @@ type LlmLlamacppArgs = LlmLlamacpp.LlmLlamacppArgs;
 type Message = LlmLlamacpp.Message;
 type RunOptions = LlmLlamacpp.RunOptions;
 /**
- * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
- * entry for single-file models. Matches the C++ shard-expansion contract
- * in `GGUFShards::expandGGUFIntoShards`.
+ * Validates the single disk path. For a sharded GGUF, pass only the first
+ * shard; Fabric discovers the remaining shards. Weight streaming is unsupported.
  */
 declare function pickPrimaryGgufPath(files: string[]): string;
 interface LlmLlamacpp {
@@ -103,6 +102,7 @@ declare namespace LlmLlamacpp {
      */
     type AddonBatchRunResult = AddonModule.AddonBatchRunResult;
     interface Addon {
+        /** @deprecated Weight streaming was removed. Always rejects; use files.model with one disk path. */
         loadWeights(data: {
             filename: string;
             chunk: Uint8Array | null;
@@ -404,6 +404,7 @@ declare namespace LlmLlamacpp {
         [key: string]: string | number | boolean | string[] | undefined;
     }
     interface LlmLlamacppArgs {
+        /** One absolute disk path, or only the first shard path. Weight buffers, multiple paths and tensor-name files are unsupported. */
         files: {
             model: string[];
             projectionModel?: string;

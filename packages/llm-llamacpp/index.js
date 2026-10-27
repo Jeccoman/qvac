@@ -239,13 +239,24 @@ function normalizeFinetuneParams(opts) {
     return out;
 }
 /**
- * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
- * entry for single-file models. Matches the C++ shard-expansion contract
- * in `GGUFShards::expandGGUFIntoShards`.
+ * Validates the single disk path. For a sharded GGUF, pass only the first
+ * shard; Fabric discovers the remaining shards. Weight streaming is unsupported.
  */
 function pickPrimaryGgufPath(files) {
-    const SHARD_REGEX = /-\d+-of-\d+\.gguf$/;
-    return files.find((p) => SHARD_REGEX.test(p)) || files[0];
+    if (!Array.isArray(files) || files.length === 0) {
+        throw new TypeError("files.model must contain one absolute disk path");
+    }
+    if (files.length !== 1) {
+        throw new TypeError("Weight streaming is no longer supported. Pass only one disk path in files.model; " +
+            "for a sharded model, pass only the first shard path. Do not pass a tensor-name file.");
+    }
+    if (typeof files[0] !== "string" || files[0].length === 0 || !path.isAbsolute(files[0])) {
+        throw new TypeError("files.model[0] must be an absolute disk path string; weight buffers are not supported");
+    }
+    if (files[0].endsWith(".tensors.txt")) {
+        throw new TypeError("Weight streaming is no longer supported. Pass the first GGUF shard path, not a tensor-name file.");
+    }
+    return files[0];
 }
 // Replace media Uint8Array contents with a small summary so the logger never
 // asks V8 to JSON.stringify multi-MB binary blobs.
@@ -270,7 +281,7 @@ const LlmLlamacpp = class LlmLlamacpp {
     opts;
     logger;
     state;
-    _files;
+    _modelPath;
     _projectionModelPath;
     _config;
     _finetuneJob;
@@ -281,17 +292,7 @@ const LlmLlamacpp = class LlmLlamacpp {
     _batchHandler;
     _checkpointSaveDir;
     constructor({ files, config, logger = null, opts = {} }) {
-        if (!files || !Array.isArray(files.model) || files.model.length === 0) {
-            throw new TypeError("files.model must be a non-empty array of absolute paths");
-        }
-        for (const [i, entry] of files.model.entries()) {
-            if (typeof entry !== "string" || entry.length === 0) {
-                throw new TypeError(`files.model[${i}] must be an absolute path string`);
-            }
-            if (!path.isAbsolute(entry)) {
-                throw new TypeError(`files.model[${i}] must be an absolute path (got: ${entry})`);
-            }
-        }
+        this._modelPath = pickPrimaryGgufPath(files?.model);
         if (files.projectionModel !== undefined) {
             if (typeof files.projectionModel !== "string" || files.projectionModel.length === 0) {
                 throw new TypeError("files.projectionModel must be an absolute path string");
@@ -300,7 +301,6 @@ const LlmLlamacpp = class LlmLlamacpp {
                 throw new TypeError(`files.projectionModel must be an absolute path (got: ${files.projectionModel})`);
             }
         }
-        this._files = files.model;
         this._projectionModelPath = files.projectionModel || "";
         this._config = config;
         this.logger = new QvacLogger(logger);
@@ -361,18 +361,14 @@ const LlmLlamacpp = class LlmLlamacpp {
     }
     async _load() {
         this.logger.info("Starting model load");
-        const primaryGgufPath = pickPrimaryGgufPath(this._files);
         const configurationParams = {
-            path: primaryGgufPath,
+            path: this._modelPath,
             projectionPath: this._projectionModelPath,
             config: { ...this._config },
         };
         this.logger.info("Creating addon with configuration:", configurationParams);
         try {
             this.addon = this._createAddon(configurationParams);
-            if (this._files.length > 1) {
-                await this._streamShards();
-            }
             this.logger.info("Activating addon");
             await this.addon.activate();
         }
@@ -388,17 +384,6 @@ const LlmLlamacpp = class LlmLlamacpp {
             throw loadError;
         }
         this.logger.info("Model load completed successfully");
-    }
-    async _streamShards() {
-        for (const filePath of this._files) {
-            const filename = path.basename(filePath);
-            const stream = fs.createReadStream(filePath);
-            for await (const chunk of stream) {
-                await this.addon.loadWeights({ filename, chunk, completed: false });
-            }
-            await this.addon.loadWeights({ filename, chunk: null, completed: true });
-            this.logger.info(`Streamed weights for ${filename}`);
-        }
     }
     run(prompt, runOptions) {
         if (BatchHandler.isBatchInput(prompt)) {

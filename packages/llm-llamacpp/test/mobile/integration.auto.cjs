@@ -605,3 +605,8 @@ async function runVisionpsyImageNoUpscaleTokensTest (options = {}) { // eslint-d
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runVisionpsyImageNoUpscaleTokensTest')) return __FILTERED
   return runIntegrationModule('../integration/visionpsy-image-no-upscale-tokens.test.js', options)
 }
+
+async function runWeightLoadingTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runWeightLoadingTest')) return __FILTERED
+  return runIntegrationModule('../integration/weight-loading.test.js', options)
+}

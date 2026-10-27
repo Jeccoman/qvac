@@ -30,8 +30,6 @@ protected:
            MP::OnMissing::Fail,
            "https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded",
            true /* isSharded */);
-    if (shardedModel_.found())
-      LlamaModel::resolveShardPaths(shardedModel_.shards, shardedModel_.path);
 
     largeShardedModel_ =
         MP("Llama-3.2-1B-Instruct-Q4_0-00001-of-00008.gguf",
@@ -39,9 +37,6 @@ protected:
            MP::OnMissing::Skip,
            "https://huggingface.co/jmb95/Llama-3.2-1B-Instruct-Q4_0-sharded",
            true /* isSharded */);
-    if (largeShardedModel_.found())
-      LlamaModel::resolveShardPaths(
-          largeShardedModel_.shards, largeShardedModel_.path);
   }
 
   LlamaModel loadModel(const std::string& modelPath) {
@@ -59,13 +54,17 @@ protected:
         test_common::readFileToStreambufBinary(mp.shards.tensors_file);
     ASSERT_NE(tensorsBuf, nullptr)
         << "Failed to open: " << mp.shards.tensors_file;
-    model.setWeightsForFile(tensorsBasename, std::move(tensorsBuf));
+    EXPECT_THROW(
+        model.setWeightsForFile(tensorsBasename, std::move(tensorsBuf)),
+        qvac_errors::StatusError);
 
     for (const auto& shardPath : mp.shards.gguf_files) {
       auto streambuf = test_common::readFileToStreambufBinary(shardPath);
       ASSERT_NE(streambuf, nullptr) << "Failed to open shard: " << shardPath;
-      model.setWeightsForFile(
-          fs::path(shardPath).filename().string(), std::move(streambuf));
+      EXPECT_THROW(
+          model.setWeightsForFile(
+              fs::path(shardPath).filename().string(), std::move(streambuf)),
+          qvac_errors::StatusError);
     }
   }
 
@@ -82,13 +81,15 @@ TEST_F(ModelFullLoadingTest, SingleFile_LoadsSuccessfully) {
   EXPECT_TRUE(model.isLoaded());
 }
 
-TEST_F(ModelFullLoadingTest, StreamingSingleFile_LoadsSuccessfully) {
+TEST_F(ModelFullLoadingTest, RejectedStreamingSingleFile_StillLoadsFromDisk) {
   REQUIRE_MODEL(singleModel_);
   LlamaModel model = loadModel(singleModel_.path);
   std::string filename = fs::path(singleModel_.path).filename().string();
   auto streambuf = test_common::readFileToStreambufBinary(singleModel_.path);
   ASSERT_NE(streambuf, nullptr) << "Failed to open: " << singleModel_.path;
-  model.setWeightsForFile(filename, std::move(streambuf));
+  EXPECT_THROW(
+      model.setWeightsForFile(filename, std::move(streambuf)),
+      qvac_errors::StatusError);
   model.waitForLoadInitialization();
   EXPECT_TRUE(model.isLoaded());
 }
@@ -100,19 +101,16 @@ TEST_F(ModelFullLoadingTest, Sharded_LoadsSuccessfully) {
   EXPECT_TRUE(model.isLoaded());
 }
 
-TEST_F(ModelFullLoadingTest, Sharded_LoadFromLaterShardUsesFirstShard) {
+TEST_F(ModelFullLoadingTest, Sharded_LoadFromLaterShardRequiresFirstShard) {
   REQUIRE_MODEL(shardedModel_);
   ASSERT_GE(shardedModel_.shards.gguf_files.size(), 2U);
 
   LlamaModel model = loadModel(shardedModel_.shards.gguf_files[1]);
-  model.waitForLoadInitialization();
-
-  ASSERT_TRUE(model.isLoaded());
-  EXPECT_EQ(
-      model.getCommonParams().model.path, shardedModel_.shards.gguf_files[0]);
+  EXPECT_THROW(model.waitForLoadInitialization(), qvac_errors::StatusError);
+  EXPECT_FALSE(model.isLoaded());
 }
 
-TEST_F(ModelFullLoadingTest, StreamingShards_LoadsSuccessfully) {
+TEST_F(ModelFullLoadingTest, RejectedStreamingShards_StillLoadFromDisk) {
   REQUIRE_MODEL(shardedModel_);
   LlamaModel model = loadModel(shardedModel_.path);
   streamShardsIntoModel(model, shardedModel_);
@@ -127,7 +125,7 @@ TEST_F(ModelFullLoadingTest, LargeSharded_LoadsSuccessfully) {
   EXPECT_TRUE(model.isLoaded());
 }
 
-TEST_F(ModelFullLoadingTest, StreamingLargeShards_LoadsSuccessfully) {
+TEST_F(ModelFullLoadingTest, RejectedStreamingLargeShards_StillLoadFromDisk) {
   REQUIRE_MODEL(largeShardedModel_);
   LlamaModel model = loadModel(largeShardedModel_.path);
   streamShardsIntoModel(model, largeShardedModel_);

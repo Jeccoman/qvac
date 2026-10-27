@@ -5,6 +5,7 @@
       "runLayaTest",
       "runModelLoadingTest",
       "runFitTest",
+      "runWeightLoadingTest",
       "runRerankTest",
       "runMultimodalTest"
     ],
@@ -16,6 +17,7 @@
       "runLayaTest",
       "runModelLoadingTest",
       "runFitTest",
+      "runWeightLoadingTest",
       "runRerankTest",
       "runMultimodalTest"
     ],

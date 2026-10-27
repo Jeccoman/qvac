@@ -105,11 +105,14 @@ async function loaded(opts = {}, bindingOpts = {}) {
   return { runner, binding }
 }
 
-test('constructor rejects missing or relative model paths', function (t) {
-  t.exception.all(() => new TestRunner({ files: { model: [] }, config: {} }), /non-empty array/)
-  t.exception.all(
+test('constructor rejects missing or relative model paths', async function (t) {
+  await t.exception.all(
+    () => new TestRunner({ files: { model: [] }, config: {} }),
+    /one absolute disk path/
+  )
+  await t.exception.all(
     () => new TestRunner({ files: { model: ['model.gguf'] }, config: {} }),
-    /must be an absolute path/
+    /must be an absolute disk path/
   )
 })
 

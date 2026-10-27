@@ -54,6 +54,7 @@ export type AddonBatchRunResult = {
     id?: never;
     ids: string[];
 };
+/** @deprecated Weight streaming was removed. Kept only to report a migration error. */
 export interface LoadWeightsData {
     filename: string;
     chunk: Uint8Array | null;
@@ -67,6 +68,7 @@ export interface AddonConfigurationParams {
 export type AddonOutputCallback = (addon: unknown, event: unknown, data: unknown, error: unknown, jobId: unknown) => void;
 export interface LlamaBinding {
     createInstance(owner: LlamaInterface, configurationParams: AddonConfigurationParams, outputCallback: AddonOutputCallback, reserved: null): object;
+    /** @deprecated Always throws ERR_WEIGHT_STREAMING_UNSUPPORTED. */
     loadWeights(handle: unknown, data: LoadWeightsData): Promise<void> | void;
     activate(handle: unknown): Promise<void> | void;
     activeJobs(handle: unknown): number;
@@ -97,7 +99,8 @@ export declare class LlamaInterface {
     private readonly _binding;
     private _handle;
     constructor(binding: unknown, configurationParams: AddonConfigurationParams, outputCb: AddonOutputCallback);
-    loadWeights(weightsData: LoadWeightsData): Promise<void>;
+    /** @deprecated Always rejects ERR_WEIGHT_STREAMING_UNSUPPORTED; use a disk path. */
+    loadWeights(_weightsData: LoadWeightsData): Promise<void>;
     /**
      * Moves addon to the LISTENING state after all the initialization is done
      */

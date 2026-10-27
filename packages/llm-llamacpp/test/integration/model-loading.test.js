@@ -135,7 +135,6 @@ test(
   { timeout: 4 * 60 * 1000, skip: !(isLinuxX64 || isWindowsX64) },
   async (t) => {
     const shardFiles = [
-      'Qwen3-0.6B-UD-IQ1_S.tensors.txt',
       'Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf',
       'Qwen3-0.6B-UD-IQ1_S-00002-of-00003.gguf',
       'Qwen3-0.6B-UD-IQ1_S-00003-of-00003.gguf'
@@ -155,7 +154,7 @@ test(
     }
 
     const addon = new LlmLlamacpp({
-      files: { model: shardPaths },
+      files: { model: [shardPaths[0]] },
       config,
       logger: console,
       opts: { stats: true }

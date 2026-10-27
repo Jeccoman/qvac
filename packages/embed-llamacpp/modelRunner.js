@@ -2,8 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ModelRunner = exports.ModelInterface = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
-const fs = require("bare-fs");
-const path = require("bare-path");
 const QvacLogger = require("@qvac/logging");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
@@ -26,8 +24,10 @@ class ModelInterface {
             return;
         await this._binding.cancel(this._handle);
     }
-    async loadWeights(data) {
-        return this._binding.loadWeights(this._handle, data);
+    /** @deprecated Always rejects ERR_WEIGHT_STREAMING_UNSUPPORTED; use a disk path. */
+    loadWeights(_data) {
+        void _data;
+        return Promise.reject(Object.assign(new Error("Weight streaming is no longer supported. Pass a disk path; for a sharded model, pass only the first shard path."), { code: "ERR_WEIGHT_STREAMING_UNSUPPORTED" }));
     }
     async activate() {
         return this._binding.activate(this._handle);
@@ -53,24 +53,13 @@ class ModelRunner {
     opts;
     state;
     _addon;
-    _files;
+    _modelPath;
     _config;
     _job;
     _run;
     _hasActiveResponse;
     constructor({ files, config = {}, logger = null, opts = {} }) {
-        if (!files || !Array.isArray(files.model) || files.model.length === 0) {
-            throw new TypeError("files.model must be a non-empty array of absolute paths");
-        }
-        for (const [i, entry] of files.model.entries()) {
-            if (typeof entry !== "string" || entry.length === 0) {
-                throw new TypeError(`files.model[${i}] must be an absolute path string`);
-            }
-            if (!path.isAbsolute(entry)) {
-                throw new TypeError(`files.model[${i}] must be an absolute path (got: ${entry})`);
-            }
-        }
-        this._files = files.model;
+        this._modelPath = (0, addon_1.pickPrimaryGgufPath)(files?.model);
         this._config = config;
         this.logger = new QvacLogger(logger);
         this.opts = opts;
@@ -94,14 +83,11 @@ class ModelRunner {
         });
     }
     async _load() {
-        const configurationParams = { path: (0, addon_1.pickPrimaryGgufPath)(this._files), config: this._config };
+        const configurationParams = { path: this._modelPath, config: this._config };
         this.logger.info(`Creating ${this._modelName} instance with configuration:`, configurationParams);
         try {
             const binding = this._loadBinding();
             this._addon = this._createAddon(binding, configurationParams, this._outputCallback.bind(this));
-            if (this._files.length > 1) {
-                await this._streamShards();
-            }
             await this._addon.activate();
         }
         catch (loadError) {
@@ -113,15 +99,6 @@ class ModelRunner {
             throw loadError;
         }
         this.logger.info(`${this._modelName} model loaded`);
-    }
-    async _streamShards() {
-        for (const filePath of this._files) {
-            const filename = path.basename(filePath);
-            for await (const chunk of fs.createReadStream(filePath)) {
-                await this._addon.loadWeights({ filename, chunk, completed: false });
-            }
-            await this._addon.loadWeights({ filename, chunk: null, completed: true });
-        }
     }
     /** Runs one request; a subclass's `run()` checks and forwards it here. */
     async _runRequest(request) {

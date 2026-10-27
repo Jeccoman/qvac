@@ -1,6 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
-import fs = require("bare-fs");
-import path = require("bare-path");
 import QvacLogger = require("@qvac/logging");
 /* eslint-enable @typescript-eslint/no-require-imports */
 import {
@@ -30,6 +28,7 @@ export interface ModelConfigurationParams<Config> {
 /** The binding calls every native model instance shares. */
 export interface ModelBinding {
   activate(handle: unknown): Promise<void> | void;
+  /** @deprecated Always throws ERR_WEIGHT_STREAMING_UNSUPPORTED. */
   loadWeights(handle: unknown, data: LoadWeightsData): Promise<void>;
   cancel(handle: unknown): Promise<void>;
   destroyInstance(handle: unknown): void;
@@ -68,8 +67,13 @@ export abstract class ModelInterface<Config, Binding extends ModelBinding> {
     await this._binding.cancel(this._handle);
   }
 
-  async loadWeights(data: LoadWeightsData): Promise<void> {
-    return this._binding.loadWeights(this._handle, data);
+  /** @deprecated Always rejects ERR_WEIGHT_STREAMING_UNSUPPORTED; use a disk path. */
+  loadWeights(_data: LoadWeightsData): Promise<void> {
+    void _data;
+    return Promise.reject(Object.assign(
+      new Error("Weight streaming is no longer supported. Pass a disk path; for a sharded model, pass only the first shard path."),
+      { code: "ERR_WEIGHT_STREAMING_UNSUPPORTED" },
+    ));
   }
 
   async activate(): Promise<void> {
@@ -85,6 +89,7 @@ export abstract class ModelInterface<Config, Binding extends ModelBinding> {
 }
 
 export interface ModelRunnerArgs<Config> {
+  /** One absolute disk path, or only the first shard path. Weight streaming is unsupported. */
   files: { model: string[] };
   /** Required, with at least `device`. */
   config: Config;
@@ -113,7 +118,7 @@ export abstract class ModelRunner<
   state: { configLoaded: boolean };
 
   protected _addon: Addon | null;
-  private readonly _files: string[];
+  private readonly _modelPath: string;
   private readonly _config: Config;
   private readonly _job: JobHandler;
   private readonly _run: RunExclusive;
@@ -123,18 +128,7 @@ export abstract class ModelRunner<
   protected abstract readonly _modelName: string;
 
   constructor({ files, config = {} as Config, logger = null, opts = {} }: ModelRunnerArgs<Config>) {
-    if (!files || !Array.isArray(files.model) || files.model.length === 0) {
-      throw new TypeError("files.model must be a non-empty array of absolute paths");
-    }
-    for (const [i, entry] of files.model.entries()) {
-      if (typeof entry !== "string" || entry.length === 0) {
-        throw new TypeError(`files.model[${i}] must be an absolute path string`);
-      }
-      if (!path.isAbsolute(entry)) {
-        throw new TypeError(`files.model[${i}] must be an absolute path (got: ${entry})`);
-      }
-    }
-    this._files = files.model;
+    this._modelPath = pickPrimaryGgufPath(files?.model);
     this._config = config;
     this.logger = new QvacLogger(logger as QvacLogger.LoggerInterface);
     this.opts = opts;
@@ -180,14 +174,11 @@ export abstract class ModelRunner<
   }
 
   private async _load(): Promise<void> {
-    const configurationParams = { path: pickPrimaryGgufPath(this._files), config: this._config };
+    const configurationParams = { path: this._modelPath, config: this._config };
     this.logger.info(`Creating ${this._modelName} instance with configuration:`, configurationParams);
     try {
       const binding = this._loadBinding();
       this._addon = this._createAddon(binding, configurationParams, this._outputCallback.bind(this));
-      if (this._files.length > 1) {
-        await this._streamShards();
-      }
       await this._addon.activate();
     } catch (loadError) {
       try {
@@ -197,16 +188,6 @@ export abstract class ModelRunner<
       throw loadError;
     }
     this.logger.info(`${this._modelName} model loaded`);
-  }
-
-  private async _streamShards(): Promise<void> {
-    for (const filePath of this._files) {
-      const filename = path.basename(filePath);
-      for await (const chunk of fs.createReadStream(filePath)) {
-        await this._addon!.loadWeights({ filename, chunk, completed: false });
-      }
-      await this._addon!.loadWeights({ filename, chunk: null, completed: true });
-    }
   }
 
   /** Runs one request; a subclass's `run()` checks and forwards it here. */

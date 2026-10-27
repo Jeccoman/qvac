@@ -23,6 +23,7 @@ export interface ModelConfigurationParams<Config> {
 /** The binding calls every native model instance shares. */
 export interface ModelBinding {
     activate(handle: unknown): Promise<void> | void;
+    /** @deprecated Always throws ERR_WEIGHT_STREAMING_UNSUPPORTED. */
     loadWeights(handle: unknown, data: LoadWeightsData): Promise<void>;
     cancel(handle: unknown): Promise<void>;
     destroyInstance(handle: unknown): void;
@@ -41,11 +42,13 @@ export declare abstract class ModelInterface<Config, Binding extends ModelBindin
      */
     protected abstract _createInstance(configurationParams: ModelConfigurationParams<Config>, outputCb: AddonOutputCallback): object;
     cancel(): Promise<void>;
-    loadWeights(data: LoadWeightsData): Promise<void>;
+    /** @deprecated Always rejects ERR_WEIGHT_STREAMING_UNSUPPORTED; use a disk path. */
+    loadWeights(_data: LoadWeightsData): Promise<void>;
     activate(): Promise<void>;
     unload(): Promise<void>;
 }
 export interface ModelRunnerArgs<Config> {
+    /** One absolute disk path, or only the first shard path. Weight streaming is unsupported. */
     files: {
         model: string[];
     };
@@ -71,7 +74,7 @@ export declare abstract class ModelRunner<Config, Request, Payload, Output, Addo
         configLoaded: boolean;
     };
     protected _addon: Addon | null;
-    private readonly _files;
+    private readonly _modelPath;
     private readonly _config;
     private readonly _job;
     private readonly _run;
@@ -91,7 +94,6 @@ export declare abstract class ModelRunner<Config, Request, Payload, Output, Addo
     protected abstract _mapEvent(event: unknown, data: unknown, error: unknown): MappedModelEvent<Output> | null;
     load(): Promise<void>;
     private _load;
-    private _streamShards;
     /** Runs one request; a subclass's `run()` checks and forwards it here. */
     protected _runRequest(request: Request): Promise<QvacResponse<Output>>;
     private _runInternal;

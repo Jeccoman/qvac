@@ -80,8 +80,10 @@ class LlamaInterface {
         }
         this._handle = this._binding.createInstance(this, configurationParams, outputCb, null);
     }
-    loadWeights(weightsData) {
-        return Promise.resolve(this._binding.loadWeights(this._handle, weightsData));
+    /** @deprecated Always rejects ERR_WEIGHT_STREAMING_UNSUPPORTED; use a disk path. */
+    loadWeights(_weightsData) {
+        void _weightsData;
+        return Promise.reject(Object.assign(new Error("Weight streaming is no longer supported. Pass a disk path; for a sharded model, pass only the first shard path."), { code: "ERR_WEIGHT_STREAMING_UNSUPPORTED" }));
     }
     /**
      * Moves addon to the LISTENING state after all the initialization is done
