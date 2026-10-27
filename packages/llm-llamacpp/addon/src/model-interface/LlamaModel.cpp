@@ -2185,10 +2185,17 @@ size_t LlamaModel::calcToken(const CalcTokenRequest& request) const {
         "calcToken: the model is not loaded");
   }
   LlmContext& context = *state_->llmContext_;
+  if (!request.text.has_value() && !request.history.has_value() &&
+      !request.tools.has_value()) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(qvac_errors::general_error::InvalidArgument),
+        "calcToken: pass text, history or tools");
+  }
   if (!request.history.has_value() && !request.tools.has_value()) {
     return ::common_tokenize(
                llama_model_get_vocab(context.getModel()),
-               request.text,
+               *request.text,
                false,
                true)
         .size();
@@ -2226,10 +2233,10 @@ size_t LlamaModel::calcToken(const CalcTokenRequest& request) const {
         toString(qvac_errors::general_error::InvalidArgument),
         "calcToken: media messages cannot be counted");
   }
-  if (!request.text.empty()) {
+  if (request.text.has_value() && !request.text->empty()) {
     common_chat_msg userTurn;
     userTurn.role = "user";
-    userTurn.content = request.text;
+    userTurn.content = *request.text;
     conversation.chatMsgs.push_back(std::move(userTurn));
   }
   if (conversation.chatMsgs.empty()) {

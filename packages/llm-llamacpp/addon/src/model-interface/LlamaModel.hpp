@@ -198,9 +198,10 @@ public:
 
   /// What `calcToken` counts. `history` is a `Message[]` in `process`'s JSON
   /// shape, tool definitions allowed; `tools` holds tool definitions only. A
-  /// tool name in both is a duplicate and throws.
+  /// tool name in both is a duplicate and throws. A request with none of the
+  /// three throws.
   struct CalcTokenRequest {
-    std::string text;
+    std::optional<std::string> text;
     std::optional<std::string> history;
     std::optional<std::string> tools;
   };

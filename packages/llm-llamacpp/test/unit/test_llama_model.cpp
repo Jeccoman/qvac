@@ -1135,6 +1135,8 @@ TEST_F(LlamaModelTest, CalcTokenRejectsInvalidRequests) {
   model.waitForLoadInitialization();
   ASSERT_TRUE(model.isLoaded());
 
+  // Nothing passed.
+  EXPECT_THROW((void)model.calcToken({}), qvac_errors::StatusError);
   // A message among the tool definitions.
   EXPECT_THROW(
       (void)model.calcToken(

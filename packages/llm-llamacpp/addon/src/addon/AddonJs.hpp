@@ -1069,8 +1069,7 @@ inline js_value_t* calcToken(js_env_t* env, js_callback_info_t* info) try {
   auto params = args.getJsObject(1, "params");
   LlamaModel::CalcTokenRequest request;
   request.text =
-      params.getOptionalPropertyAs<js::String, std::string>(env, "text")
-          .value_or("");
+      params.getOptionalPropertyAs<js::String, std::string>(env, "text");
   request.history =
       params.getOptionalPropertyAs<js::String, std::string>(env, "history");
   request.tools =
