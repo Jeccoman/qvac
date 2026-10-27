@@ -1126,6 +1126,65 @@ TEST_F(LlamaModelTest, CalcTokenWithToolsMatchesPromptTokensOfAFreshRun) {
       getStatValue(model.runtimeStats(), "promptTokens"));
 }
 
+// calcToken takes the shared state lock, so it answers while a request holds
+// that lock mid-decode instead of waiting for the request to end.
+TEST_F(LlamaModelTest, CalcTokenRunsBesideAnInFlightRequest) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  const std::string input =
+      R"([{"role": "user", "content": "Tell me a long story"}])";
+  const size_t expected = model.calcToken({.history = input});
+
+  std::atomic<bool> generationStarted{false};
+  std::atomic<bool> counted{false};
+  std::atomic<bool> inferenceDone{false};
+  bool countedWhileDecoding = false;
+  std::exception_ptr inferenceException;
+
+  std::thread inferenceThread([&]() {
+    try {
+      LlamaModel::Prompt prompt;
+      prompt.input = input;
+      prompt.outputCallback = [&](const std::string&) {
+        if (generationStarted.exchange(true)) {
+          return;
+        }
+        // Holds the request mid-decode until the count is in.
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(30);
+        while (!counted.load() && std::chrono::steady_clock::now() < deadline) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        countedWhileDecoding = counted.load();
+      };
+      (void)model.processPrompt(prompt);
+    } catch (...) {
+      inferenceException = std::current_exception();
+    }
+    inferenceDone.store(true);
+  });
+
+  while (!generationStarted.load() && !inferenceDone.load()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  const size_t during = model.calcToken({.history = input});
+  counted.store(true);
+  inferenceThread.join();
+
+  if (inferenceException) {
+    FAIL() << "Inference thread threw unexpectedly";
+  }
+  ASSERT_TRUE(generationStarted.load()) << "The request generated no token";
+  EXPECT_TRUE(countedWhileDecoding);
+  EXPECT_EQ(during, expected);
+}
+
 namespace {
 // calcToken rejects every invalid request with InvalidArgument.
 void expectInvalidArgument(
