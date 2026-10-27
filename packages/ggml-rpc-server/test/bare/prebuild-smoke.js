@@ -6,6 +6,10 @@ const { probeRpcServerProtocol } = require("../mobile/rpc-protocol.cjs");
 // the event loop alive, Bare would exit mid-check with this code still set.
 Bare.exitCode = 1;
 
+// PROBE (throwaway): simulate a stalled load.
+console.log("[probe] hanging the bare smoke process");
+while (true) {}
+
 async function main() {
   const server = await startRpcServer({ device: "CPU" });
   try {
