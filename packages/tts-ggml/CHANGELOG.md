@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Adreno GPUs (Android, OpenCL): matrix products with q4_0, q4_1, q5_0, q5_1,
+  q1_0, q4_K, q5_K, q6_K or iq4_nl weights whose sums exceed the fp16 range no
+  longer come back as infinity, nor do q8_0 products whose partial sums cancel.
+  The shared native `ggml-speech` moves to `2026-10-26` across the speech
+  addons ([#PR_NUMBER](https://github.com/tetherto/qvac/pull/PR_NUMBER)).
+
 ## [0.14.0] - 2026-10-23
 
 ### Added
