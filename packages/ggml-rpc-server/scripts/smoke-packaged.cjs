@@ -1,5 +1,9 @@
 "use strict";
 
+// PROBE (throwaway): hang the whole step to prove the 15-minute step timeout.
+console.log("[probe] hanging the smoke step");
+while (true) {}
+
 const { spawnSync } = require("node:child_process");
 const {
   cpSync,
