@@ -3886,6 +3886,10 @@
             }
           ]
         },
+        "prefill": {
+          "description": "Evaluate the prompt without generating an answer. Requires an enabled KV cache.",
+          "type": "boolean"
+        },
         "tools": {
           "description": "Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.",
           "type": "array",
@@ -4591,6 +4595,10 @@
               "minLength": 1
             }
           ]
+        },
+        "prefill": {
+          "description": "Evaluate the prompt without generating an answer. Requires an enabled KV cache.",
+          "type": "boolean"
         },
         "tools": {
           "description": "Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.",
