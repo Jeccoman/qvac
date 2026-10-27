@@ -28,6 +28,10 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 - MOSS-Transcribe-Diarize decodes 29-42% faster on Metal (M3 Ultra), with
   identical transcripts.
 
+### Changed
+
+- Use fused CPU encoder attention for MOSS-Transcribe-Diarize.
+
 ## [0.11.1] - 2026-10-23
 
 ### Added
