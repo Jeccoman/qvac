@@ -208,14 +208,15 @@ public:
 
   /// Tokens @p request takes on this model. `text` alone is counted raw, with
   /// no chat template and no BOS. With `history` or `tools` the conversation,
-  /// `text` appended as a user turn, is rendered by the chat template as the
-  /// opening request of a fresh conversation, BOS and generation prompt
-  /// included. Tools the template leaves out are not counted, and a `prefill`
-  /// request, which renders without a user turn, can differ. Media is not
-  /// counted. Every invalid request, a media message included, throws
-  /// `InvalidArgument`. Reads only load-time
-  /// state and never enters the job scheduler, so it runs beside in-flight
-  /// requests.
+  /// `text` (even empty) appended as a user turn, is rendered by the chat
+  /// template as the opening request of a fresh conversation, BOS and
+  /// generation prompt included. Tools the template leaves out are not
+  /// counted, and a `prefill` request, which renders without a user turn, can
+  /// differ. Media is not counted. Every invalid request, a media message
+  /// included, throws `InvalidArgument` prefixed `calcToken:`; a chat template
+  /// that cannot render the conversation fails as it would for `process`.
+  /// Reads only load-time state and never enters the job scheduler, so it runs
+  /// beside in-flight requests.
   [[nodiscard]] size_t calcToken(const CalcTokenRequest& request) const;
 
   /**

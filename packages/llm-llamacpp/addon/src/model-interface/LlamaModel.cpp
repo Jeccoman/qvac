@@ -2235,7 +2235,7 @@ size_t LlamaModel::calcToken(const CalcTokenRequest& request) const {
         toString(qvac_errors::general_error::InvalidArgument),
         "calcToken: media messages cannot be counted");
   }
-  if (request.text.has_value() && !request.text->empty()) {
+  if (request.text.has_value()) {
     common_chat_msg userTurn;
     userTurn.role = "user";
     userTurn.content = *request.text;

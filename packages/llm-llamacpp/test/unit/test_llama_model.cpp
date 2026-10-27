@@ -1068,6 +1068,11 @@ TEST_F(LlamaModelTest, CalcTokenMatchesPromptTokensOfAFreshRun) {
   const size_t fromText =
       model.calcToken({.text = "Hello, world!", .history = "[" + system + "]"});
   EXPECT_EQ(fromHistory, fromText);
+  // An empty text is an empty user turn, as `process` renders one.
+  EXPECT_EQ(
+      model.calcToken({.text = "", .history = "[" + system + "]"}),
+      model.calcToken(
+          {.history = "[" + system + R"(,{"role": "user", "content": ""}])"}));
 
   LlamaModel::Prompt prompt;
   prompt.input = "[" + system + "," + user + "]";
