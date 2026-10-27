@@ -81,7 +81,7 @@ Tier 1: Platform targets for which prebuilds are provided as defined by the .git
 - @qvac/infer-base: Provides `createJobHandler` and `exclusiveRunQueue` helpers (composition, no base class)
 - @qvac/logging: `QvacLogger` wrapper and native logging bridge
 - @qvac/fabric (^0.22.0): Shared llama.cpp/ggml inference engine. The runtime and backends ship in a `@qvac/fabric-<host>` platform package: optional dependencies on desktop, a direct dependency of the app on mobile
-- Bare Runtime (≥1.24.0): JavaScript runtime (provides `bare-fs` for direct file streaming)
+- Bare Runtime (≥1.24.0): JavaScript runtime
 
 ---
 
@@ -149,7 +149,7 @@ graph TB
 | JavaScript | GGMLBert | Constructor | `{ files, config, logger, opts }` (single object) |
 | GGMLBert | createJobHandler / exclusiveRunQueue | Composition | Function calls |
 | GGMLBert | BertInterface | Composition | Method calls |
-| GGMLBert | bare-fs | `bare-fs.createReadStream(path)` | Raw chunks per shard |
+| Native model | Fabric | `common_init_from_params` | Single GGUF path or first disk shard path |
 | BertInterface | C++ Addon | require.addon() | Native binding |
 | Application | package exports | `.` / `./addonLogging` | Public API plus native log bridge |
 
@@ -213,7 +213,7 @@ classDiagram
 
 | Class / Helper | Responsibility | Lifecycle | Dependencies |
 |----------------|----------------|-----------|--------------|
-| GGMLBert | Standalone class. Orchestrate model lifecycle, stream files from disk, dispatch inference | Created by user, persistent | `createJobHandler`, `exclusiveRunQueue`, `BertInterface`, `bare-fs` |
+| GGMLBert | Standalone class. Orchestrate disk model loading and dispatch inference | Created by user, persistent | `createJobHandler`, `exclusiveRunQueue`, `BertInterface` |
 | createJobHandler | Factory producing a job handler with `start/output/end/fail` semantics; returns a `QvacResponse` | Created once per GGMLBert | None |
 | exclusiveRunQueue | Factory producing a promise queue that serialises `load()` / `run()` / `unload()` calls | Created once per GGMLBert | None |
 | QvacResponse | Return embedding results and expose `await()`/`cancel()`/`stats` | Created per `run()` call, short-lived | None |
@@ -226,7 +226,7 @@ classDiagram
 | GGMLBert | createJobHandler | Composition | Job state machine + response emission |
 | GGMLBert | exclusiveRunQueue | Composition | Serialise concurrent callers |
 | GGMLBert | BertInterface | Composition | Native addon calls |
-| GGMLBert | bare-fs | Direct use | Stream each caller-supplied path into the addon |
+| Native model | Fabric | Disk loading API | Read the GGUF and any disk shards from the first path |
 
 </details>
 
@@ -339,7 +339,7 @@ graph TB
 
 | Layer | Components | Responsibility | Language | Why This Layer |
 |-------|------------|----------------|----------|----------------|
-| 1. JavaScript API | GGMLBert (standalone), LayaDecisions and Reranker (on ModelRunner), `createJobHandler`, `exclusiveRunQueue`, `bare-fs` | High-level API, file streaming, job/queue composition | JS | Ergonomic API for npm consumers |
+| 1. JavaScript API | GGMLBert (standalone), LayaDecisions and Reranker (on ModelRunner), `createJobHandler`, `exclusiveRunQueue` | High-level API, disk-path validation, job/queue composition | JS | Ergonomic API for npm consumers |
 | 2. Bridge | BertInterface, LayaInterface and RerankInterface (on ModelInterface), binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
 | 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Single-job runner, threading, callbacks | C++ | Performance, native integration |
 | 4. Model | BertModel, LayaModel, RerankModel, LlamaModelLoader | Inference logic, batch processing; shared model loading | C++ | Direct llama.cpp integration |
@@ -367,7 +367,7 @@ graph TB
 
 #### **GGMLBert (index.js)**
 
-**Responsibility:** Main API class. Standalone (no base class) — uses composition with `createJobHandler` and `exclusiveRunQueue` from `@qvac/infer-base`. Orchestrates the model lifecycle, streams each caller-supplied file path directly from disk via `bare-fs`, and dispatches inference jobs.
+**Responsibility:** Main API class. Standalone (no base class) — uses composition with `createJobHandler` and `exclusiveRunQueue` from `@qvac/infer-base`. Validates one disk path, delegates model loading to the native addon and dispatches inference jobs.
 
 **Constructor:** `new GGMLBert({ files, config, logger, opts })` — a single options object.
 - `files.model` — exactly one absolute disk path, or only the first shard path for a split GGUF.
@@ -863,7 +863,7 @@ In fabric, the scoring is part of the library (`llama_get_embeddings_seq` return
 - ✅ Reranking ships with the addon, without waiting on a fabric release
 - ✅ `BertModel` and `RerankModel` share the load path
 - ❌ A change to llama-server's pair formatting has to be mirrored by hand
-- ❌ A streamed model is not checked for a classifier head, since its tensor table is not on disk
+- ✅ Classifier-head checks include later disk shards, discovered from the first GGUF header
 - ❌ Special-token text in a query or document is parsed as special tokens in a templated pair, as in llama-server
 
 ---

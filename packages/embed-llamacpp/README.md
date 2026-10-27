@@ -207,7 +207,7 @@ const model = new GGMLBert(args)
 await model.load()
 ```
 
-`load()` takes no arguments. The addon streams each file listed in `files.model` directly from disk via `bare-fs` and then activates the model. There is no data loader, no progress callback, and no download step — the caller is responsible for ensuring the files already exist at the paths passed to the constructor.
+`load()` takes no arguments. The addon activates the native loader with the single disk path in `files.model`. Fabric discovers and reads any remaining shards. The caller must ensure that every model file is complete and present on disk before calling `load()`.
 
 ### 6. Generate embeddings for input sequence
 
@@ -475,7 +475,7 @@ With `opts: { stats: true }`, `response.stats` holds `total_tokens`, `total_time
 | `[ GTE :: UnsupportedModel ]` | The GGUF is not a reranker: it declares a pooling other than rank (an embedding model), or has no classifier head (for example a chat model). Detected before its weights load |
 | `[ GTE :: UnableToLoadMetadata ]`, `[ GTE :: UnableToLoadModel ]` | The file cannot be read or loaded |
 
-A reranker GGUF that declares no pooling at all, as many converted cross-encoders do, is accepted. The classifier-head check reads the GGUF files from disk, so a model streamed in shards is not checked.
+A reranker GGUF that declares no pooling at all, as many converted cross-encoders do, is accepted. The classifier-head check reads the disk headers, including later shards discovered from the first GGUF.
 
 `run()` throws a `TypeError` when the request is not `{ query: string, documents: string[] }`, and otherwise rejects with an error that carries only a `message`: a document that with the query is longer than `batch_size` (`increase batch_size`) or than the model's trained context, a failed forward pass (`llama_decode failed`), or `Job cancelled` after `cancel()`.
 

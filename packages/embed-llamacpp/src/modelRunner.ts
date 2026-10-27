@@ -101,7 +101,7 @@ type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>;
 const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or being processed";
 
 /**
- * The lifecycle a standalone model class shares: load (streaming shards),
+ * The lifecycle a standalone model class shares: load from one disk path,
  * one request at a time, cancel and unload, over its own native instance.
  * A subclass names the model and supplies how the instance is created, how a
  * request becomes the job's input, and how native events map to outputs.

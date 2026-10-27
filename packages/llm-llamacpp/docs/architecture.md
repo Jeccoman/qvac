@@ -144,7 +144,7 @@ graph TB
 | LlmLlamacpp | exclusiveRunQueue | Composition | Promise-based queue |
 | LlmLlamacpp | LlamaInterface | Composition | Method calls |
 | LlamaInterface | C++ Addon | require.addon() | Native binding |
-| LlmLlamacpp | bare-fs | Direct read stream | Absolute file paths |
+| LlmLlamacpp | bare-fs | Checkpoint file operations | Absolute file paths |
 | Application | package exports | `.` / `./addonLogging` / `./addon.js` / `./binding.js` | Public API plus advanced native bridge entry points |
 
 </details>
@@ -331,7 +331,7 @@ graph TB
 
 | Layer | Components | Responsibility | Language | Why This Layer |
 |-------|------------|----------------|----------|----------------|
-| 1. JavaScript API | LlmLlamacpp, createJobHandler, exclusiveRunQueue, bare-fs | High-level API, job/response lifecycle, shard streaming | JS | Ergonomic API for npm consumers |
+| 1. JavaScript API | LlmLlamacpp, createJobHandler, exclusiveRunQueue, bare-fs | High-level API, disk-path validation, job/response lifecycle | JS | Ergonomic API for npm consumers |
 | 2. Bridge | LlamaInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
 | 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Multi-job scheduler, threading, callbacks | C++ | Performance, native integration |
 | 4. Model | LlamaModel, ModelMetadata, Contexts | Inference logic, disk metadata extraction, chat formatting | C++ | Direct llama.cpp integration |
