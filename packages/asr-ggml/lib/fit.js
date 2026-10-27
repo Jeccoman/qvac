@@ -17,8 +17,7 @@ const driver_1 = require("../engines/moss/driver");
  * each load does. `marginBytes` defaults to the engine's own headroom, which
  * is 256 MiB for parakeet.
  *
- * A model the fitter cannot read resolves with `status: "error"` and the
- * engine's reason. Only a broken request rejects.
+ * A model the fitter cannot read, or an invalid request, rejects.
  *
  * Concurrent calls run one at a time.
  */
