@@ -209,6 +209,17 @@ GrammarVerdict checkGrammar(
   return verdict;
 }
 
+// The prompt parser rejects malformed input as InvalidInputFormat.
+void expectInvalidInputFormat(LlamaModel& model, const std::string& input) {
+  try {
+    (void)LlamaModelTestPeer::formatPrompt(model, input);
+    ADD_FAILURE() << "accepted: " << input.substr(0, 200);
+  } catch (const qvac_errors::StatusError& e) {
+    EXPECT_NE(e.codeString().find("InvalidInputFormat"), std::string::npos)
+        << e.codeString() << " " << e.what();
+  }
+}
+
 } // namespace
 
 class ToolGrammarModelTest : public ::testing::Test {
@@ -788,15 +799,13 @@ TEST_F(ToolGrammarModelTest, PromptParserRejectsMalformedToolDefinitions) {
   for (const char* input : {
            R"([{"type":"function","function":{"name":"f"}}])",
            R"([{"type":"function"}])",
+           R"([{"type":"function","name":""}])",
            R"([{"type":"function","name":7}])",
            R"([{"type":"function","name":"f","description":7}])",
            R"([{"type":7,"role":"user","content":"hi"}])",
            R"([{"role":7,"content":"hi"}])",
        }) {
-    EXPECT_THROW(
-        LlamaModelTestPeer::formatPrompt(*model, input),
-        qvac_errors::StatusError)
-        << input;
+    expectInvalidInputFormat(*model, input);
   }
 }
 
@@ -811,20 +820,14 @@ TEST_F(ToolGrammarModelTest, PromptParserRejectsDeepNesting) {
     return std::string(depth, '[') + std::string(depth, ']');
   };
   EXPECT_NO_THROW(LlamaModelTestPeer::formatPrompt(*model, nested(128)));
-  EXPECT_THROW(
-      LlamaModelTestPeer::formatPrompt(*model, nested(129)),
-      qvac_errors::StatusError);
+  expectInvalidInputFormat(*model, nested(129));
   // Deep enough to overflow a worker thread's stack without the check.
-  EXPECT_THROW(
-      LlamaModelTestPeer::formatPrompt(*model, nested(100000)),
-      qvac_errors::StatusError);
-  EXPECT_THROW(
-      LlamaModelTestPeer::formatPrompt(
-          *model,
-          R"([{"role":"assistant","content":"","tool_calls":[{"name":"f",)"
-          R"("arguments":"{\"a\":)" +
-              nested(200) + R"(}"}]}])"),
-      qvac_errors::StatusError);
+  expectInvalidInputFormat(*model, nested(100000));
+  expectInvalidInputFormat(
+      *model,
+      R"([{"role":"assistant","content":"","tool_calls":[{"name":"f",)"
+      R"("arguments":"{\"a\":)" +
+          nested(200) + R"(}"}]}])");
 
   const ParsedPromptPayload parsed = LlamaModelTestPeer::formatPrompt(
       *model,

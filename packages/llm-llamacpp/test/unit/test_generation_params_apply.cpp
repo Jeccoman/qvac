@@ -648,20 +648,35 @@ TEST(GenerationParamsApplyTest, InstallingASchemaClearsToolGrammarCompanions) {
 // fabric's schema-to-grammar conversion recurses per level, so a schema deep
 // enough to overflow a worker thread's stack is rejected before it runs.
 TEST(GenerationParamsApplyTest, DeeplyNestedSchemaIsRejected) {
-  common_params_sampling sampling;
+  // A schema whose objects nest @p depth levels.
+  const auto nestedSchema = [](int depth) {
+    std::string schema;
+    for (int i = 1; i < depth; ++i) {
+      schema += R"({"type":"array","items":)";
+    }
+    return schema + R"({"type":"string"})" + std::string(depth - 1, '}');
+  };
   int nPredict = -1;
 
-  GenerationParams overrides;
-  std::string schema;
-  for (int i = 0; i < 2000; ++i) {
-    schema += R"({"type":"array","items":)";
+  common_params_sampling accepted;
+  GenerationParams atLimit;
+  atLimit.json_schema = nestedSchema(128);
+  applyGenerationOverridesToSampling(accepted, nPredict, atLimit);
+  EXPECT_EQ(accepted.grammar.type, COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT);
+
+  for (const int depth : {129, 2001}) {
+    common_params_sampling sampling;
+    GenerationParams overrides;
+    overrides.json_schema = nestedSchema(depth);
+    try {
+      applyGenerationOverridesToSampling(sampling, nPredict, overrides);
+      ADD_FAILURE() << "accepted a schema nested " << depth << " levels";
+    } catch (const qvac_errors::StatusError& e) {
+      EXPECT_NE(e.codeString().find("InvalidArgument"), std::string::npos)
+          << e.codeString() << " " << e.what();
+    }
+    EXPECT_EQ(sampling.grammar.type, COMMON_GRAMMAR_TYPE_NONE);
   }
-  schema += R"({"type":"string"})" + std::string(2000, '}');
-  overrides.json_schema = schema;
-  EXPECT_THROW(
-      applyGenerationOverridesToSampling(sampling, nPredict, overrides),
-      qvac_errors::StatusError);
-  EXPECT_EQ(sampling.grammar.type, COMMON_GRAMMAR_TYPE_NONE);
 }
 
 // The same clear applies to a per-request `grammar`, which is USER-typed and
