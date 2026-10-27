@@ -8,9 +8,9 @@ namespace qvac_lib_inference_addon_llama::utils {
 /// fabric's `json_schema_to_grammar` and chat templates recurse once per
 /// level with no limit; on a 512 KB thread stack, the default for worker
 /// threads on macOS and iOS, fabric overflows past 512 levels.
-inline constexpr size_t kMaxJsonDepth = 128;
+inline constexpr size_t K_MAX_JSON_DEPTH = 128;
 
-/// Whether arrays and objects in @p json nest deeper than kMaxJsonDepth.
+/// Whether arrays and objects in @p json nest deeper than K_MAX_JSON_DEPTH.
 /// Brackets inside strings are skipped.
 inline bool nestsTooDeep(std::string_view json) {
   size_t depth = 0;
@@ -28,7 +28,7 @@ inline bool nestsTooDeep(std::string_view json) {
     } else if (c == '"') {
       inString = true;
     } else if (c == '[' || c == '{') {
-      if (++depth > kMaxJsonDepth) {
+      if (++depth > K_MAX_JSON_DEPTH) {
         return true;
       }
     } else if ((c == ']' || c == '}') && depth > 0) {

@@ -1826,7 +1826,7 @@ std::string optionalString(
   return it->second.get<std::string>();
 }
 
-using qvac_lib_inference_addon_llama::utils::kMaxJsonDepth;
+using qvac_lib_inference_addon_llama::utils::K_MAX_JSON_DEPTH;
 using qvac_lib_inference_addon_llama::utils::nestsTooDeep;
 
 // The same value in an order-preserving parse of the request, or null when
@@ -1950,7 +1950,9 @@ ParsedPromptPayload parsePromptPayload(
   if (nestsTooDeep(input)) {
     resetMedia();
     std::string errorMsg = string_format(
-        "%s: input nests deeper than %zu levels\n", kParseTag, kMaxJsonDepth);
+        "%s: input nests deeper than %zu levels\n",
+        kParseTag,
+        K_MAX_JSON_DEPTH);
     throw qvac_errors::StatusError(
         ADDON_ID, toString(InvalidInputFormat), errorMsg);
   }
