@@ -12,12 +12,15 @@
 ### Fixed
 
 - A prompt nested deeper than 128 levels, including `tool_calls` arguments,
-  is rejected with `InvalidInputFormat` instead of crashing the process. A
-  `generationParams.json_schema` nested that deep is rejected with
-  `InvalidArgument`.
+  is rejected with `InvalidInputFormat` instead of crashing the process.
   Malformed tool definitions (no top-level `name`, or a non-string `name`,
-  `description`, `role` or `type`) are rejected the same way instead of
-  throwing picojson's raw type-mismatch error
+  `description`, `role` or `type`) are rejected with `InvalidInputFormat`
+  too, instead of throwing picojson's raw type-mismatch error. A tool with an
+  empty `name`, rejected before as `InvalidArgument`, is now rejected as
+  `InvalidInputFormat`
+  ([#5353](https://github.com/tetherto/qvac/pull/5353)).
+- A `generationParams.json_schema` nested deeper than 128 levels is rejected
+  with `InvalidArgument` instead of crashing the process
   ([#5353](https://github.com/tetherto/qvac/pull/5353)).
 
 ## [0.65.0] - 2026-10-27
