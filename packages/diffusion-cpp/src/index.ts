@@ -855,8 +855,10 @@ import { assessFit as assessFitImpl } from './fit'
 
 export { assessFit } from './fit'
 export type {
+  DiffusionFitDevice,
   DiffusionFitRequest,
   DiffusionFitResult,
+  DiffusionFitStats,
   DiffusionFitStatus,
   DiffusionFitWorkload,
   EsrganFitRequest,
