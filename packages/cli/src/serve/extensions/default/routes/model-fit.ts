@@ -19,10 +19,11 @@ type ResolvedCandidate = Parameters<typeof assessModelFit>[0]['models'][number]
 type ModelType = ResolvedCandidate['modelType']
 
 const description = `
-Ask whether models are likely to fit in this host's memory before loading them,
-backed by the SDK's \`assessModelFit()\`. Nothing is downloaded or loaded: each
-model's weightless registry description is fetched (tens of KB) and the engine's
-own fitter runs against it, falling back to a floor computed from catalog facts.
+Ask whether models fit in this host's memory when loaded together, before loading
+them, backed by the SDK's \`assessModelFit()\`. Nothing is downloaded or loaded:
+each model's weightless registry description is fetched (tens of KB) and the
+engine's own fitter runs against it. The memory each load takes is summed per
+device and compared against what is free.
 
 Each entry in \`models\` names a \`serve.models\` alias or an SDK model constant.
 An alias is assessed with the config it would load with; \`modelConfig\` is
@@ -32,10 +33,13 @@ sources cannot be given here: companion sources in \`modelConfig\` must name
 constants, so a request never makes the server read a path or URL of its
 choosing.
 
-The answer is advisory. \`verdict\` is \`likely-fits\`, \`likely-too-large\` or
-\`unknown\`, combined across every model under \`execution\`; \`unknown\` means
-the evidence supports neither, not "no". \`models\` carries one verdict per
-entry, in request order, and \`budget\` the memory it was judged against.
+The answer is advisory. \`verdict\` is \`fits\`, \`does-not-fit\` or \`unknown\`
+for every model loaded together. \`unknown\` means the load would start but
+cannot be sized: an engine with no fitter, a load the fitter cannot project, a
+model with no registry description that is not on disk, or a device that
+reported no free memory. A load that \`loadModel\` would refuse fails the
+request.
+\`models\` carries each entry's own verdict and engine stats, in request order.
 `.trim()
 
 // lunte-disable-next-line require-await
@@ -52,13 +56,14 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
               invalid_json: 'Body is not valid JSON',
               invalid_models: '`models` is missing or empty, or an entry is malformed',
               too_many_models: `\`models\` carries more than ${MAX_FIT_MODELS} entries`,
-              invalid_execution: '`execution` is not `sequential` or `concurrent`',
-              invalid_policy: '`policy` is not `interactive-v1`',
               invalid_model_src: 'A companion source in `modelConfig` is not an SDK model constant',
               invalid_request: 'The body carries an unknown field'
             },
             404: { model_not_found: 'An entry names neither an alias nor a model constant' },
-            500: { model_fit_failed: 'The SDK assessment failed' }
+            500: {
+              model_fit_failed:
+                'The SDK assessment failed, or an entry is a load `loadModel` would refuse'
+            }
           })
         },
         tags: ['System'],
@@ -67,7 +72,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       }
     },
     async (req) => {
-      const { models, execution, policy } = req.body
+      const { models } = req.body
       const candidates = models.map((candidate) =>
         resolveCandidate(app.qvac.serveConfig, candidate)
       )
@@ -75,11 +80,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
       let result: Awaited<ReturnType<typeof assessModelFit>>
       try {
-        result = await assessModelFit({
-          models: candidates,
-          ...(execution !== undefined && { execution }),
-          ...(policy !== undefined && { policy })
-        })
+        result = await assessModelFit({ models: candidates })
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         app.qvac.logger.error(`  model fit failed: ${message}`)

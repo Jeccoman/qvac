@@ -24,58 +24,28 @@ export const modelFitBody = z.strictObject({
     .array(fitCandidate)
     .min(1)
     .max(MAX_FIT_MODELS)
-    .describe('Models to assess together under one memory budget.'),
-  execution: z
-    .enum(['sequential', 'concurrent'])
-    .optional()
-    .describe(
-      '`sequential` (default) counts only the largest working-memory peak; `concurrent` counts every peak. A declared assumption, not a scheduling instruction.'
-    ),
-  policy: z
-    .literal('interactive-v1')
-    .optional()
-    .describe('Headroom policy. `interactive-v1` (default) withholds 20% of available memory.')
+    .describe('Models to assess as if loaded at the same time.')
 })
 
-const verdict = z.enum(['likely-fits', 'likely-too-large', 'unknown'])
+const verdict = z.enum(['fits', 'does-not-fit', 'unknown'])
 
 // Loose, so a field the SDK adds later still reaches the client through the
-// response serializer. Evidence and basis stay open strings for the same reason.
+// response serializer.
 const modelResult = z.looseObject({
   model: z.string().describe('The alias or constant name as requested.'),
-  name: z.string().describe('Catalog name of the assessed model.'),
-  verdict,
-  evidence: z.string().optional(),
-  floorBytes: z.number().optional(),
-  estimatorVersion: z.string().optional(),
-  device: z.string().optional(),
-  reasons: z.array(z.string())
-})
-
-const budget = z.looseObject({
-  totalBytes: z.number(),
-  usedBytes: z.number(),
-  availableBytes: z.number(),
-  reservedBytes: z.number(),
-  availableAfterReserveBytes: z.number()
+  verdict: verdict.describe("The engine fitter's verdict for this model alone."),
+  stats: z
+    .record(z.string(), z.unknown())
+    .describe("Figures specific to the engine, as its addon's `FitStats` type declares them.")
 })
 
 export const modelFitResult = z.looseObject({
   object: z.literal('model_fit'),
-  verdict,
-  basis: z.string(),
-  execution: z.enum(['sequential', 'concurrent']),
-  evidence: z.string().optional(),
-  budget: budget.optional(),
-  floorBytes: z.number().optional(),
-  models: z.array(modelResult).describe('Per-model verdicts, in request order.'),
-  reasons: z.array(z.string()),
-  assumptions: z.array(z.string())
+  verdict: verdict.describe('The verdict for every model loaded together.'),
+  models: z.array(modelResult).describe('One entry per model, in request order.')
 })
 
 export const MODEL_FIT_FIELD_CODES: Record<string, string> = {
   models: 'invalid_models',
-  'models:too_big': 'too_many_models',
-  execution: 'invalid_execution',
-  policy: 'invalid_policy'
+  'models:too_big': 'too_many_models'
 }

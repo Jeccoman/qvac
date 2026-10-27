@@ -19,14 +19,12 @@ function issuePaths(input: unknown): string[] {
 }
 
 describe('modelFitBody', () => {
-  it('accepts named models with optional config, execution and policy', () => {
+  it('accepts named models with optional config', () => {
     const result = modelFitBody.safeParse({
       models: [
         { model: 'my-llm', modelConfig: { ctx_size: 8192 } },
         { model: 'QWEN3_600M_INST_Q4' }
-      ],
-      execution: 'concurrent',
-      policy: 'interactive-v1'
+      ]
     })
     assert.equal(result.success, true)
   })
@@ -49,11 +47,6 @@ describe('modelFitBody', () => {
       'models/0'
     ])
     assert.deepEqual(issuePaths({ models: [{ model: 'm' }], nope: true }), [''])
-  })
-
-  it('rejects an unknown execution or policy', () => {
-    assert.deepEqual(issuePaths({ models: [{ model: 'm' }], execution: 'parallel' }), ['execution'])
-    assert.deepEqual(issuePaths({ models: [{ model: 'm' }], policy: 'batch-v1' }), ['policy'])
   })
 
   // The error handler builds its `models:too_big` lookup key from these two fields.
@@ -79,11 +72,7 @@ describe('modelFitResult', () => {
     const parsed = modelFitResult.parse({
       object: 'model_fit',
       verdict: 'unknown',
-      basis: 'system-memory',
-      execution: 'sequential',
-      models: [{ model: 'a', name: 'A', verdict: 'unknown', reasons: [], newField: 1 }],
-      reasons: [],
-      assumptions: [],
+      models: [{ model: 'a', verdict: 'unknown', stats: {}, newField: 1 }],
       later: true
     })
     assert.equal((parsed as Record<string, unknown>)['later'], true)

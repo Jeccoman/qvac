@@ -50,12 +50,6 @@ describe('qvac models/fit: validation', () => {
     assertStatusAndError(await fit({ models }), 400, 'too_many_models')
   })
 
-  it('rejects an unknown execution and policy', async () => {
-    const models = [{ model: 'chat-model' }]
-    assertStatusAndError(await fit({ models, execution: 'parallel' }), 400, 'invalid_execution')
-    assertStatusAndError(await fit({ models, policy: 'batch-v1' }), 400, 'invalid_policy')
-  })
-
   it('rejects an unknown field, including a raw model source', async () => {
     assertStatusAndError(
       await fit({ models: [{ model: 'chat-model' }], nope: true }),
