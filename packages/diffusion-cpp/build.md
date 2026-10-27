@@ -147,7 +147,9 @@ directory.
 
 CUDA is opt-in: the default Linux source build does not require the CUDA
 toolkit. Use `build:cuda` or `-D SD_CUDA=ON` to enable it. The Linux vcpkg
-toolchain selects the matching Clang host compiler for nvcc.
+toolchain selects the matching Clang host compiler for nvcc. Linux CI builds
+also enable CUDA when setup-cuda exports `QVAC_CUDA_TOOLKIT`, unless tests or
+fuzzing are enabled. An explicit `-D SD_CUDA=OFF` overrides this default.
 
 For native Linux ARM64 builds on GB10 or Linux x64 builds on RTX 5090, put
 the versioned LLVM executables and the actual CUDA toolkit directory on

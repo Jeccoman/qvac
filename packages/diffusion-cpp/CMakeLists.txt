@@ -12,10 +12,7 @@ if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif()
 
-option(SD_CUDA "Enable CUDA GPU backend" OFF)
-if(SD_CUDA)
-  list(APPEND VCPKG_MANIFEST_FEATURES "cuda")
-endif()
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ConfigureCuda.cmake)
 
 option(SD_OPENCL "Enable OpenCL GPU backend (Android/Adreno)" OFF)
 if(SD_OPENCL)
@@ -218,6 +215,8 @@ if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
   include(GoogleTest)
   enable_testing()
+  add_test(NAME cuda-options
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/cuda-options.cmake)
   add_subdirectory(test/unit)
 endif()
 

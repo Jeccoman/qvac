@@ -128,7 +128,10 @@ npm run build
 CUDA is opt-in for source builds. Ordinary Linux builds use Vulkan and CPU
 without requiring a CUDA toolkit. To include CUDA, install the toolkit and run
 the explicit build command below. Linux release prebuilds enable `SD_CUDA`
-through `platformCmakeDefines`; CI provisions the pinned toolkit with
+through `platformCmakeDefines`. The `QVAC_CUDA_TOOLKIT` marker exported by CI
+setup also enables CUDA for Linux builds without tests or fuzzing, so automatic
+PR builds work before the updated build metadata reaches `main`. An explicit
+`-D SD_CUDA=OFF` overrides this default. CI provisions the toolkit with
 `includeCuda` and `includeCudaArm64`.
 
 ```bash
