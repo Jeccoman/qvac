@@ -1,7 +1,6 @@
 """Unit tests for tetherto.qvac_sdk._api.assess_model_fit's client-side behavior
 (candidate key mapping, type inference, descriptor and config handling,
-validation) against a fake transport, mirroring the JS assess-model-fit unit
-coverage."""
+validation) against a fake transport."""
 
 from __future__ import annotations
 
@@ -20,11 +19,7 @@ from tetherto.qvac_sdk.models import (
 OK = {
     "type": "assessModelFit",
     "verdict": "unknown",
-    "basis": "system-memory",
-    "execution": "sequential",
-    "models": [],
-    "reasons": ["no evidence"],
-    "assumptions": [],
+    "models": [{"verdict": "unknown", "stats": {}}],
 }
 
 
@@ -54,7 +49,8 @@ async def test_assess_model_fit_returns_the_parsed_response():
         transport, models=[{"model_src": QWEN3_600M_INST_Q4}]
     )
     assert result.verdict.value == "unknown"
-    assert result.reasons == ["no evidence"]
+    [model] = result.models
+    assert model.verdict.value == "unknown"
     assert transport.sent["type"] == "assessModelFit"
 
 
@@ -146,7 +142,7 @@ async def test_assess_model_fit_alias_warns_and_normalizes():
     assert candidate["modelType"] == "llamacpp-completion"
 
 
-async def test_assess_model_fit_threads_workloads_and_execution():
+async def test_assess_model_fit_threads_workloads():
     transport = FakeTransport(response=OK)
     await api.assess_model_fit(
         transport,
@@ -157,40 +153,15 @@ async def test_assess_model_fit_threads_workloads_and_execution():
                 "tts_workload": {"prompt": "rain on a roof", "seconds": 5},
             }
         ],
-        execution="concurrent",
     )
-    assert transport.sent["execution"] == "concurrent"
     [candidate] = transport.sent["models"]
     assert candidate["ttsWorkload"] == {"prompt": "rain on a roof", "seconds": 5}
 
 
-async def test_assess_model_fit_leaves_execution_and_policy_to_the_worker_when_unset():
+async def test_assess_model_fit_sends_only_the_models():
     transport = FakeTransport(response=OK)
     await api.assess_model_fit(transport, models=[{"model_src": QWEN3_600M_INST_Q4}])
-    assert "execution" not in transport.sent
-    assert "policy" not in transport.sent
-
-
-async def test_assess_model_fit_threads_policy():
-    transport = FakeTransport(response=OK)
-    await api.assess_model_fit(
-        transport,
-        models=[{"model_src": QWEN3_600M_INST_Q4}],
-        policy="interactive-v1",
-    )
-    assert transport.sent["policy"] == "interactive-v1"
-
-
-async def test_assess_model_fit_rejects_an_unknown_policy():
-    transport = FakeTransport(response=OK)
-    policy: Any = "batch-v1"
-    with pytest.raises(RequestValidationError, match="policy"):
-        await api.assess_model_fit(
-            transport,
-            models=[{"model_src": QWEN3_600M_INST_Q4}],
-            policy=policy,
-        )
-    assert transport.sent is None
+    assert set(transport.sent) == {"type", "models"}
 
 
 async def test_assess_model_fit_rejects_an_unknown_candidate_key():
@@ -207,16 +178,4 @@ async def test_assess_model_fit_rejects_an_empty_candidate_list():
     transport = FakeTransport(response=OK)
     with pytest.raises(RequestValidationError, match="assessModelFit"):
         await api.assess_model_fit(transport, models=[])
-    assert transport.sent is None
-
-
-async def test_assess_model_fit_rejects_an_unknown_execution():
-    transport = FakeTransport(response=OK)
-    execution: Any = "parallel"
-    with pytest.raises(RequestValidationError, match="execution"):
-        await api.assess_model_fit(
-            transport,
-            models=[{"model_src": QWEN3_600M_INST_Q4}],
-            execution=execution,
-        )
     assert transport.sent is None
