@@ -37,7 +37,7 @@ global `bare` executable does not change the SDK's worker dependency.
 Load MOSS-SoundEffect with `modelType: 'tts-ggml'` and
 `modelConfig: { ttsEngine: 'moss-sfx' }`; the primary source is its single
 GGUF. With an `AUDIOGEN_MOSS_SFX_V2_*` constant, pass its `.src` URL as
-`modelSrc`, because the full descriptor selects the audiogen plugin. This also applies to fit assessment: use explicit `modelType` and `ttsEngine`, and a downloaded local file for metadata-only TTS fit. The bare `.src` URL lacks checksum/registry coordinates for a weightless stub; the audiogen descriptor/resource profile does not identify the TTS engine. Use
+`modelSrc`, because the full descriptor selects the audiogen plugin. This also applies to fit assessment: use explicit `modelType` and `ttsEngine`, and a downloaded local file for metadata-only TTS fit. The bare `.src` URL lacks the checksum and registry coordinates a weightless description needs, and the full descriptor names the audiogen engine. Use
 a text description, with optional `seconds`
 (up to 30), `negativePrompt`, `steps`, `guidance` and `shift`. These controls
 can also be load defaults. The output is 48 kHz.
@@ -70,8 +70,9 @@ projections. Add `ttsWorkload` beside `modelConfig` on the assessment candidate:
 `{ prompt, seconds }` for sound effects. MOSS needs its backbone and codec
 decoder; reference encoding also needs the codec encoder. Prompt rows must
 cover the complete native prompt, including dialogue and reference rows.
-Missing workloads return an unknown assessment rather than guessing.
-MOSS-Speech has no native fitter in this release and remains unknown. Workloads are fit-only; loading a MOSS model does not accept them and its automatic fit preflight remains unknown.
+Without a workload the verdict is `unknown`. MOSS-Speech has no fitter, so its
+verdict is `unknown`. Workloads are fit-only: `loadModel` does not accept them,
+so the load-time fit check for a MOSS model is `unknown`.
 
 The CLI configuration picker includes both engines. Their conversation and
 sound-effect request controls are library-only because the OpenAI speech
@@ -204,34 +205,39 @@ initialized, the event omits the resource block.
 
 ## Pre-download model fit assessment
 
-Use `assessModelFit` to check, before downloading anything, whether models are
-likely to fit in this device's memory. Each candidate is described as `loadModel`
-takes it. It reads generated catalog metadata plus a fresh memory sample, and for
-a single candidate the registry's weightless description of the artifact, so the
-engine's own fitter can answer — no weights, no load:
+Use `assessModelFit` to check, before downloading anything, whether a set of
+models fits in this device's memory when loaded together. Each model is described
+as `loadModel` takes it. Each engine's own fitter runs against the registry's
+weightless description of the model, or the model itself when it is on disk, and
+reports the memory its load takes on each device. The SDK sums that memory per
+device and compares it against what is free — no weights, no load:
 
 ```ts
 import { assessModelFit, QWEN3_8B_INST_Q4_K_M } from '@qvac/sdk'
 
 const result = await assessModelFit({
-  models: [{ modelSrc: QWEN3_8B_INST_Q4_K_M, modelType: 'llm', modelConfig: { ctx_size: 8192 } }],
-  execution: 'sequential',
-  policy: 'interactive-v1'
+  models: [
+    {
+      modelSrc: QWEN3_8B_INST_Q4_K_M,
+      modelType: 'llamacpp-completion',
+      modelConfig: { ctx_size: 8192 }
+    }
+  ]
 })
 
-console.log(result.verdict) // 'likely-fits' | 'likely-too-large' | 'unknown'
+console.log(result.verdict) // 'fits' | 'does-not-fit' | 'unknown'
 ```
 
 The result is advisory: it does not block `loadModel`, reserve memory, or make a
-performance claim. `unknown` is a real answer meaning the evidence does not
-support a call either way — show it as "can't say", not as "no".
+performance claim. `unknown` is the answer for a load that would start but cannot
+be sized: an engine with no fitter, a load the fitter cannot project, a model
+with no registry description that is not on disk, or a device that reported no
+free memory. Show it as "can't say". A load that `loadModel` would refuse throws
+the same error: no plugin for the model type, a config the plugin refuses, or a
+model the fitter cannot read.
 
-The assessment holds back a reserve of its own, beyond the headroom the engine's
-fitter leaves, so a model the engine calls a fit can still come back
-`likely-too-large` on a host with little room.
-
-See [pre-download model fit assessment](./docs/assess-model-fit.md) for the
-budget arithmetic, the reserve, and the supported engine and workload matrix.
+See [model fit assessment](./docs/assess-model-fit.md) for how the verdict is
+reached and what each engine covers.
 
 ## Streaming transcription statistics
 
@@ -532,8 +538,8 @@ const fit = await assessModelFit({
 
 Import `assessModelFit` from `@qvac/sdk`. Use the longest recording you intend
 to transcribe, with the same prompt/hotwords and token limit as the request.
-Without `transcriptionWorkload`, MOSS has no native fit evidence, its recording
-window is omitted, and the result can remain `unknown`. Assessment uses a registry description when available,
+Without `transcriptionWorkload`, the fitter cannot project MOSS and its verdict
+is `unknown`. Assessment uses a registry description when available,
 or a local model path; it downloads no full weights. MOSS CoreML requires an
 addon revision newer than the published 0.8.0 release.
 
