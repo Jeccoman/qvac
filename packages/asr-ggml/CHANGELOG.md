@@ -14,16 +14,17 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
-### Changed
-
-- Align the shared native `speech-cpp` source to `2026-10-27` across the speech addons.
-
 ### Added
 
 - `assessFit` reports `coremlBytes` for Parakeet models on macOS and iOS: the
   memory of the Core ML diarizer sidecars a Nemotron 3 Diarization or
   Sortformer v2.1 workload can load, which the verdict counts on unified
   memory. It is 0 without sidecars and on other platforms.
+
+### Changed
+
+- Use fused CPU encoder attention for MOSS-Transcribe-Diarize.
+- Align the shared native `speech-cpp` source to `2026-10-27` across the speech addons.
 
 ## [0.11.1] - 2026-10-23
 
