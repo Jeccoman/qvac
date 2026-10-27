@@ -25,7 +25,12 @@ test('CUDA is opt-in for source builds and enabled for Linux release prebuilds',
     )
   )
   const cmake = fs.readFileSync(new URL('../CMakeLists.txt', import.meta.url), 'utf8')
-  assert.match(cmake, /if\(SD_CUDA\)\s+list\(APPEND VCPKG_MANIFEST_FEATURES "cuda"\)/)
+  assert.ok(cmake.includes('include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ConfigureCuda.cmake)'))
+  const cudaConfig = fs.readFileSync(
+    new URL('../cmake/ConfigureCuda.cmake', import.meta.url),
+    'utf8'
+  )
+  assert.match(cudaConfig, /if\(SD_CUDA\)\s+list\(APPEND VCPKG_MANIFEST_FEATURES "cuda"\)/)
   assert.equal(project.targets.build.options.ci.includeCuda, true)
   assert.equal(project.targets.build.options.ci.includeCudaArm64, true)
   assert.equal(project.targets.build.options.ci.platformCmakeDefines, 'linux: -D SD_CUDA=ON')
