@@ -6,8 +6,9 @@ namespace qvac_lib_inference_addon_llama::utils {
 
 /// Deepest array/object nesting accepted in request JSON. picojson and
 /// fabric's `json_schema_to_grammar` and chat templates recurse once per
-/// level with no limit; on a 512 KB thread stack, the default for worker
-/// threads on macOS and iOS, fabric overflows past 512 levels.
+/// nesting level; on a 512 KB thread stack, the default for worker threads on
+/// macOS and iOS, fabric overflows past 512 levels. fabric also recurses once
+/// per `$ref` link, which this limit does not bound.
 inline constexpr size_t K_MAX_JSON_DEPTH = 128;
 
 /// Whether arrays and objects in @p json nest deeper than K_MAX_JSON_DEPTH.
