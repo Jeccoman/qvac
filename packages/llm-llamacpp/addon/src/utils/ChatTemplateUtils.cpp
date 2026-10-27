@@ -395,7 +395,8 @@ PromptRenderResult exportParams(
 
 PromptRenderResult getPrompt(
     const struct common_chat_templates* tmpls,
-    struct common_chat_templates_inputs& inputs) {
+    struct common_chat_templates_inputs& inputs, bool forRequest) {
+  const auto fallbackPriority = forRequest ? Priority::ERROR : Priority::DEBUG;
   // A template can fail either because it rejects the tool definitions or
   // because it rejects the shape of the message list (e.g. Qwen3.5 raises
   // when there is no user turn to anchor its tool block on). Retry without
@@ -419,7 +420,7 @@ PromptRenderResult getPrompt(
     const bool droppedTools = legacyDroppedTools || jinjaOmittedTools;
     if (jinjaOmittedTools) {
       QLOG_IF(
-          Priority::ERROR,
+          fallbackPriority,
           "[ChatTemplateUtils] supplying the tools did not change the rendered "
           "prompt; the chat template left the definitions out and the model "
           "never saw them\n");
@@ -446,7 +447,7 @@ PromptRenderResult getPrompt(
     try {
       auto params = common_chat_templates_apply(tmpls, withoutTools);
       QLOG_IF(
-          Priority::ERROR,
+          fallbackPriority,
           string_format(
               "[ChatTemplateUtils] chat template rejected the tool "
               "definitions; rendering without tools. Error: %s\n",
@@ -463,7 +464,7 @@ PromptRenderResult getPrompt(
   }
 
   QLOG_IF(
-      Priority::ERROR,
+      fallbackPriority,
       string_format(
           "[ChatTemplateUtils] chat template could not render this "
           "conversation; falling back to the legacy renderer, which ignores "
@@ -1068,7 +1069,8 @@ size_t countRenderedChatTokens(
   }
   // Only the count is returned. `toolDefinitionsDropped` could be returned
   // with it, to tell a caller the template left the tools out of the count.
-  return tokenize(getPrompt(tmpls, inputs).prompt).size();
+  return tokenize(getPrompt(tmpls, inputs, /* forRequest = */ false).prompt)
+      .size();
 }
 
 bool configureTemplateDerivedSampling(

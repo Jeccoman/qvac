@@ -182,11 +182,13 @@ struct PromptRenderResult {
  * for models that don't support tools.
  *
  * On a tools-stripped retry `inputs.tools` is cleared so callers never see a
- * tool list the prompt does not carry.
+ * tool list the prompt does not carry. Dropped tools and the legacy fallback
+ * are logged at ERROR, or at DEBUG when @p forRequest is false because the
+ * render only measures a prompt.
  */
 PromptRenderResult getPrompt(
     const struct common_chat_templates* tmpls,
-    struct common_chat_templates_inputs& inputs);
+    struct common_chat_templates_inputs& inputs, bool forRequest = true);
 
 /**
  * @brief The reasoning markers an earlier assistant turn carries, for cutting
