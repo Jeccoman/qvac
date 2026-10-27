@@ -1936,7 +1936,8 @@ void readToolTurnFields(
 // Parses a JSON prompt into chat messages, tools and planned media without
 // touching model state. `resetMedia` runs before each throw that must drop
 // media the caller staged for this prompt. Input that is not an array of
-// objects is skipped unless `requireObjects` is set.
+// objects, or has text after the array, is accepted unless `requireObjects`
+// is set.
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 ParsedPromptPayload parsePromptPayload(
     const std::string& input, bool isTextLlm,
@@ -1961,8 +1962,21 @@ ParsedPromptPayload parsePromptPayload(
   std::vector<common_chat_tool>& tools = parsed.tools;
 
   picojson::value chatJson;
-  std::string err = picojson::parse(chatJson, input);
+  std::string err;
+  const auto parseEnd =
+      picojson::parse(chatJson, input.begin(), input.end(), &err);
 
+  const auto isJsonSpace = [](char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+  };
+  if (requireObjects && err.empty() &&
+      !std::all_of(parseEnd, input.end(), isJsonSpace)) {
+    resetMedia();
+    std::string errorMsg =
+        string_format("%s: input has text after the JSON value\n", parseTag);
+    throw qvac_errors::StatusError(
+        ADDON_ID, toString(InvalidInputFormat), errorMsg);
+  }
   const auto isObject = [](const picojson::value& item) {
     return item.is<picojson::object>();
   };

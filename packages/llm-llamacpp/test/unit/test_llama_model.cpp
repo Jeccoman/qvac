@@ -1085,6 +1085,10 @@ TEST_F(LlamaModelTest, CalcTokensMatchesPromptTokensOfAFreshRun) {
   const size_t fromText = model.calcTokens(
       {.text = "Hello, world!", .history = "[" + system + "]"});
   EXPECT_EQ(fromHistory, fromText);
+  // Whitespace around the JSON is not text after it.
+  EXPECT_EQ(
+      model.calcTokens({.history = " [" + system + "," + user + "]\n\t\r "}),
+      fromHistory);
   // An empty text is an empty user turn, as `process` renders one.
   EXPECT_EQ(
       model.calcTokens({.text = "", .history = "[" + system + "]"}),
@@ -1250,6 +1254,11 @@ TEST_F(LlamaModelTest, CalcTokensRejectsInvalidRequests) {
   expectInvalidArgument(
       model, {.text = "Hi", .history = R"({"role": "user", "content": "Hi"})"});
   expectInvalidArgument(model, {.text = "Hi", .history = R"(["Hi"])"});
+  // Text after the JSON array.
+  expectInvalidArgument(
+      model, {.history = R"([{"role": "user", "content": "Hi"}]trailing)"});
+  expectInvalidArgument(model, {.text = "Hi", .tools = "[]trailing"});
+  expectInvalidArgument(model, {.text = "Hi", .tools = "[] []"});
   // Nested deep enough to overflow the stack without the depth check.
   expectInvalidArgument(
       model,
