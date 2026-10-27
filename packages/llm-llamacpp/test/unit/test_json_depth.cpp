@@ -40,8 +40,9 @@ TEST(JsonDepthTest, SkipsBracketsInsideStrings) {
 }
 
 TEST(JsonDepthTest, IgnoresClosersBelowTheTopLevel) {
-  // Unbalanced closers never take the depth below zero, so they cannot hide
-  // the openers that follow.
+  // Unbalanced closers never take the depth below zero, so shallow input after
+  // them is not counted as deep, and deep input still is.
+  EXPECT_FALSE(nestsTooDeep("]]]" + nestedArrays(2)));
   EXPECT_TRUE(nestsTooDeep(
       std::string(K_MAX_JSON_DEPTH, ']') + nestedArrays(K_MAX_JSON_DEPTH + 1)));
 }
