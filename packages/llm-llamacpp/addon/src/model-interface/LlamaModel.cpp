@@ -1960,13 +1960,14 @@ void readToolTurnFields(
 
 // Parses a JSON prompt into chat messages, tools and planned media without
 // touching model state. `resetMedia` runs before each throw that must drop
-// media the caller staged for this prompt.
+// media the caller staged for this prompt. Input that is not an array of
+// objects is skipped unless `requireObjects` is set.
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 ParsedPromptPayload parsePromptPayload(
     const std::string& input, bool isTextLlm,
     const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>&
         reasoningTags,
-    const std::function<void()>& resetMedia) {
+    const std::function<void()>& resetMedia, bool requireObjects = false) {
   // Errors keep the prefix `run()` callers have always seen.
   constexpr const char* kParseTag = "formatPrompt";
   if (input.empty()) {
@@ -1987,6 +1988,22 @@ ParsedPromptPayload parsePromptPayload(
 
   picojson::value chatJson;
   std::string err = picojson::parse(chatJson, input);
+
+  const auto isObject = [](const picojson::value& item) {
+    return item.is<picojson::object>();
+  };
+  if (requireObjects && err.empty() &&
+      (!chatJson.is<picojson::array>() ||
+       !std::all_of(
+           chatJson.get<picojson::array>().begin(),
+           chatJson.get<picojson::array>().end(),
+           isObject))) {
+    resetMedia();
+    std::string errorMsg =
+        string_format("%s: input must be a JSON array of objects\n", kParseTag);
+    throw qvac_errors::StatusError(
+        ADDON_ID, toString(InvalidInputFormat), errorMsg);
+  }
 
   if (err.empty() && chatJson.is<picojson::array>()) {
     auto& obj = chatJson.get<picojson::array>();
@@ -2138,34 +2155,6 @@ ParsedPromptPayload parsePromptPayload(
   return parsed;
 }
 
-// `parsePromptPayload` skips JSON that is not an array of objects; a count
-// must not.
-void requireArrayOfObjects(const std::string& json, const char* field) {
-  if (nestsTooDeep(json)) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(qvac_errors::general_error::InvalidArgument),
-        string_format(
-            "calcToken: %s nests deeper than %zu levels",
-            field,
-            kMaxJsonDepth));
-  }
-  picojson::value value;
-  const auto isObject = [](const picojson::value& item) {
-    return item.is<picojson::object>();
-  };
-  if (!picojson::parse(value, json).empty() || !value.is<picojson::array>() ||
-      !std::all_of(
-          value.get<picojson::array>().begin(),
-          value.get<picojson::array>().end(),
-          isObject)) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(qvac_errors::general_error::InvalidArgument),
-        string_format("calcToken: %s must be a JSON array of objects", field));
-  }
-}
-
 } // namespace
 
 ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
@@ -2205,17 +2194,20 @@ size_t LlamaModel::calcToken(const CalcTokenRequest& request) const {
   const auto keepMedia = [] {};
   ParsedPromptPayload conversation;
   if (request.history.has_value()) {
-    requireArrayOfObjects(*request.history, "history");
     conversation = parsePromptPayload(
         *request.history,
         state_->isTextLlm_,
         context.historyReasoningTags(),
-        keepMedia);
+        keepMedia,
+        /* requireObjects = */ true);
   }
   if (request.tools.has_value()) {
-    requireArrayOfObjects(*request.tools, "tools");
     ParsedPromptPayload tools = parsePromptPayload(
-        *request.tools, state_->isTextLlm_, std::nullopt, keepMedia);
+        *request.tools,
+        state_->isTextLlm_,
+        std::nullopt,
+        keepMedia,
+        /* requireObjects = */ true);
     if (!tools.chatMsgs.empty()) {
       throw qvac_errors::StatusError(
           ADDON_ID,
