@@ -7,7 +7,10 @@
 // packages/sdk-e2e/fit-overlays build stable-diffusion.cpp and fabric-speech
 // from their fit branches.
 //
-//   node packages/sdk-e2e/scripts/fit-remote.mjs [--skip-build] [--skip-run]
+//   node packages/sdk-e2e/scripts/fit-remote.mjs [--skip-build] [--skip-run] [--no-gpu]
+//
+// --no-gpu runs the cases with every Vulkan device hidden, so each addon sees
+// only the CPU. Metal has no such switch.
 //
 // It rewrites the dependency specs in packages/inference, packages/sdk and
 // packages/sdk-e2e package.json to the packed tarballs; `git checkout` restores
@@ -216,13 +219,19 @@ function installAndBuild() {
   runShown('npm', ['run', 'bundle:sdk'], E2E_DIR)
 }
 
+// ggml's Vulkan backend keeps only the indices this lists, and a value with no
+// index lists none.
+const NO_GPU_ENV = { GGML_VK_VISIBLE_DEVICES: 'none' }
+
 function runModelFit() {
-  step('Running the model-fit e2e cases')
-  const reportDir = path.join(E2E_DIR, 'fit-remote-report')
+  const noGpu = args.has('--no-gpu')
+  step(`Running the model-fit e2e cases${noGpu ? ' with the GPUs hidden' : ''}`)
+  const reportDir = path.join(E2E_DIR, noGpu ? 'fit-remote-report-no-gpu' : 'fit-remote-report')
   runShown(
     path.join('node_modules', '.bin', 'qvac-test'),
     ['run:local:desktop', '--config', E2E_DIR, '--filter', 'model-fit', '--report-dir', reportDir],
-    E2E_DIR
+    E2E_DIR,
+    noGpu ? NO_GPU_ENV : {}
   )
   console.log(`\nReport: ${reportDir}`)
 }
