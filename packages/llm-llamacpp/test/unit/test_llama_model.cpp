@@ -1162,6 +1162,11 @@ TEST_F(LlamaModelTest, CalcTokenRejectsInvalidRequests) {
   // Tools with nothing to render them with.
   expectInvalidArgument(
       model, {.tools = R"([{"type": "function", "name": "get_weather"}])"});
+  // The same tool in both history and tools.
+  const std::string tool = R"({"type": "function", "name": "get_weather"})";
+  expectInvalidArgument(
+      model,
+      {.text = "Hi", .history = "[" + tool + "]", .tools = "[" + tool + "]"});
   // An empty conversation.
   expectInvalidArgument(model, {.history = "[]"});
   // Media on a text-only model.
