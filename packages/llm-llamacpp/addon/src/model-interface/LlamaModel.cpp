@@ -13,6 +13,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -2155,6 +2156,38 @@ ParsedPromptPayload parsePromptPayload(
   return parsed;
 }
 
+// Parses one calcToken input. Its errors are `InvalidArgument`, like the rest
+// of calcToken's, and name the field instead of formatPrompt.
+ParsedPromptPayload parseCountInput(
+    const std::string& json, const char* field, bool isTextLlm,
+    const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>&
+        reasoningTags) {
+  try {
+    // Never resets media: a request running beside this one may have staged
+    // it.
+    return parsePromptPayload(
+        json,
+        isTextLlm,
+        reasoningTags,
+        [] {},
+        /* requireObjects = */ true);
+  } catch (const qvac_errors::StatusError& error) {
+    constexpr std::string_view kRunTag = "formatPrompt: ";
+    std::string_view message = error.what();
+    if (message.substr(0, kRunTag.size()) == kRunTag) {
+      message.remove_prefix(kRunTag.size());
+    }
+    while (!message.empty() && message.back() == '\n') {
+      message.remove_suffix(1);
+    }
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "calcToken: %s: %s", field, std::string(message).c_str()));
+  }
+}
+
 } // namespace
 
 ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
@@ -2190,24 +2223,17 @@ size_t LlamaModel::calcToken(const CalcTokenRequest& request) const {
         .size();
   }
 
-  // Never resets media: a request running beside this one may have staged it.
-  const auto keepMedia = [] {};
   ParsedPromptPayload conversation;
   if (request.history.has_value()) {
-    conversation = parsePromptPayload(
+    conversation = parseCountInput(
         *request.history,
+        "history",
         state_->isTextLlm_,
-        context.historyReasoningTags(),
-        keepMedia,
-        /* requireObjects = */ true);
+        context.historyReasoningTags());
   }
   if (request.tools.has_value()) {
-    ParsedPromptPayload tools = parsePromptPayload(
-        *request.tools,
-        state_->isTextLlm_,
-        std::nullopt,
-        keepMedia,
-        /* requireObjects = */ true);
+    ParsedPromptPayload tools = parseCountInput(
+        *request.tools, "tools", state_->isTextLlm_, std::nullopt);
     if (!tools.chatMsgs.empty()) {
       throw qvac_errors::StatusError(
           ADDON_ID,

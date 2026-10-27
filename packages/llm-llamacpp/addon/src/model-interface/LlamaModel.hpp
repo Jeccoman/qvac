@@ -212,7 +212,8 @@ public:
   /// opening request of a fresh conversation, BOS and generation prompt
   /// included. Tools the template leaves out are not counted, and a `prefill`
   /// request, which renders without a user turn, can differ. Media is not
-  /// counted: a media message throws `InvalidArgument`. Reads only load-time
+  /// counted. Every invalid request, a media message included, throws
+  /// `InvalidArgument`. Reads only load-time
   /// state and never enters the job scheduler, so it runs beside in-flight
   /// requests.
   [[nodiscard]] size_t calcToken(const CalcTokenRequest& request) const;

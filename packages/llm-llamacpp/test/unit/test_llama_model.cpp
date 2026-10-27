@@ -1126,6 +1126,22 @@ TEST_F(LlamaModelTest, CalcTokenWithToolsMatchesPromptTokensOfAFreshRun) {
       getStatValue(model.runtimeStats(), "promptTokens"));
 }
 
+namespace {
+// calcToken rejects every invalid request with InvalidArgument.
+void expectInvalidArgument(
+    const LlamaModel& model, const LlamaModel::CalcTokenRequest& request) {
+  try {
+    (void)model.calcToken(request);
+    ADD_FAILURE() << "calcToken accepted an invalid request";
+  } catch (const qvac_errors::StatusError& e) {
+    EXPECT_NE(e.codeString().find("InvalidArgument"), std::string::npos)
+        << e.codeString() << " " << e.what();
+    EXPECT_EQ(std::string(e.what()).rfind("formatPrompt", 0), std::string::npos)
+        << e.what();
+  }
+}
+} // namespace
+
 TEST_F(LlamaModelTest, CalcTokenRejectsInvalidRequests) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
@@ -1136,47 +1152,39 @@ TEST_F(LlamaModelTest, CalcTokenRejectsInvalidRequests) {
   ASSERT_TRUE(model.isLoaded());
 
   // Nothing passed.
-  EXPECT_THROW((void)model.calcToken({}), qvac_errors::StatusError);
+  expectInvalidArgument(model, {});
   // A message among the tool definitions.
-  EXPECT_THROW(
-      (void)model.calcToken(
-          {.text = "Hi", .tools = R"([{"role": "user", "content": "Hi"}])"}),
-      qvac_errors::StatusError);
+  expectInvalidArgument(
+      model, {.text = "Hi", .tools = R"([{"role": "user", "content": "Hi"}])"});
+  // A tool definition missing its type.
+  expectInvalidArgument(
+      model, {.text = "Hi", .tools = R"([{"name": "get_weather"}])"});
   // Tools with nothing to render them with.
-  EXPECT_THROW(
-      (void)model.calcToken(
-          {.tools = R"([{"type": "function", "name": "get_weather"}])"}),
-      qvac_errors::StatusError);
+  expectInvalidArgument(
+      model, {.tools = R"([{"type": "function", "name": "get_weather"}])"});
   // An empty conversation.
-  EXPECT_THROW(
-      (void)model.calcToken({.history = "[]"}), qvac_errors::StatusError);
+  expectInvalidArgument(model, {.history = "[]"});
   // Media on a text-only model.
-  EXPECT_THROW(
-      (void)model.calcToken(
-          {.history =
-               R"([{"role": "user", "type": "media", "content": "data"}])"}),
-      qvac_errors::StatusError);
-  EXPECT_THROW(
-      (void)model.calcToken({.history = "not json"}), qvac_errors::StatusError);
+  expectInvalidArgument(
+      model,
+      {.history = R"([{"role": "user", "type": "media", "content": "data"}])"});
+  // A message content that is not a string.
+  expectInvalidArgument(
+      model, {.history = R"([{"role": "user", "content": 1}])"});
+  expectInvalidArgument(model, {.history = "not json"});
   // Valid JSON that is not an array of objects.
-  EXPECT_THROW(
-      (void)model.calcToken(
-          {.text = "Hi",
-           .tools = R"({"type": "function", "name": "get_weather"})"}),
-      qvac_errors::StatusError);
-  EXPECT_THROW(
-      (void)model.calcToken(
-          {.text = "Hi", .history = R"({"role": "user", "content": "Hi"})"}),
-      qvac_errors::StatusError);
-  EXPECT_THROW(
-      (void)model.calcToken({.text = "Hi", .history = R"(["Hi"])"}),
-      qvac_errors::StatusError);
+  expectInvalidArgument(
+      model,
+      {.text = "Hi",
+       .tools = R"({"type": "function", "name": "get_weather"})"});
+  expectInvalidArgument(
+      model, {.text = "Hi", .history = R"({"role": "user", "content": "Hi"})"});
+  expectInvalidArgument(model, {.text = "Hi", .history = R"(["Hi"])"});
   // Nested deep enough to overflow the stack without the depth check.
-  EXPECT_THROW(
-      (void)model.calcToken(
-          {.text = "Hi",
-           .tools = std::string(100000, '[') + std::string(100000, ']')}),
-      qvac_errors::StatusError);
+  expectInvalidArgument(
+      model,
+      {.text = "Hi",
+       .tools = std::string(100000, '[') + std::string(100000, ']')});
 }
 
 TEST_F(LlamaModelTest, ProcessContextOverflow) {
