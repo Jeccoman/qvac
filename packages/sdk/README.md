@@ -279,6 +279,16 @@ sidecars alone does not activate Core ML. See
 [`examples/asr/parakeet-unified-coreml.ts`](examples/asr/parakeet-unified-coreml.ts)
 for a local check of a Unified GGUF and its encoder bundle.
 
+TranscribePsy (`PARAKEET_TRANSCRIBEPSY_250M_Q8_0`, eight European
+languages) has a separate Core ML distribution instead of a sidecar:
+`PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0` is an encoder-less GGUF whose
+encoder and decoder bundles the SDK stages beside it, so both stages run on
+the Neural Engine. It loads on macOS and iOS only; elsewhere the load is
+refused up front with the ggml constant to use instead. See
+[`examples/asr/parakeet-transcribepsy-filesystem.ts`](examples/asr/parakeet-transcribepsy-filesystem.ts),
+which also shows the `longFormWindowFrames` / `longFormContextFrames` knobs
+that bound the offline encoder window on long recordings.
+
 ## Examples
 
 In the `./examples` subdirectory, you will find scripts demonstrating how to use all SDK functionalities. To try any of them:
@@ -329,10 +339,10 @@ npm i path/to/qvac-sdk-0.21.0.tgz
 
 The SDK test suite is organized into two buckets by runtime:
 
-| Bucket            | Runtime   | Location | Command                                |
-| ----------------- | --------- | -------- | -------------------------------------- |
-| Unit              | Node      | `test/`  | `npm run test:unit`                    |
-| Client (consumer) | Node / RN | `e2e/`   | See [`e2e/README.md`](./e2e/README.md) |
+| Bucket            | Runtime   | Location      | Command                                            |
+| ----------------- | --------- | ------------- | -------------------------------------------------- |
+| Unit              | Node      | `test/`       | `npm run test:unit`                                |
+| Client (consumer) | Node / RN | `../sdk-e2e/` | See [`../sdk-e2e/README.md`](../sdk-e2e/README.md) |
 
 See [`TESTING.md`](./TESTING.md) for the full decision tree on where new tests should land.
 
