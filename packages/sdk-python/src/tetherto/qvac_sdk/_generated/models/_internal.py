@@ -21194,6 +21194,13 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxDevice(Enum):
     auto = "auto"
 
 
+class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxCoremlComputeUnits(Enum):
+    cpu_only = "CPU_ONLY"
+    cpu_and_gpu = "CPU_AND_GPU"
+    cpu_and_ne = "CPU_AND_NE"
+    all = "ALL"
+
+
 class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -21450,6 +21457,22 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimax(GeneratedBaseModel):
         Field(
             description="Where MiniMax runs, instead of `useGPU`: `'gpu'` requires a usable GPU and fails the load otherwise, `'auto'` (what `useGPU: true` means) falls back to the CPU, `'cpu'` never touches a GPU. Cannot be combined with `useGPU`.",
             title="LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxDevice",
+        ),
+    ] = None
+    coreml_profile_dir: Annotated[
+        str | None,
+        Field(
+            alias="coremlProfileDir",
+            description="MiniMax only: compiled full Core ML profile directory on the inference host, macOS 15+. Requires coremlComputeUnits.",
+            min_length=1,
+        ),
+    ] = None
+    coreml_compute_units: Annotated[
+        LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxCoremlComputeUnits | None,
+        Field(
+            alias="coremlComputeUnits",
+            description="MiniMax only: allowed Core ML devices, chosen explicitly. Requires coremlProfileDir. This policy takes precedence over native device/useGPU selection.",
+            title="LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxCoremlComputeUnits",
         ),
     ] = None
     inference_steps: Annotated[
