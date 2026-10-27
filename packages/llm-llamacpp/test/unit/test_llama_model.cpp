@@ -1020,14 +1020,31 @@ TEST_F(LlamaModelTest, FormatPromptMediaWithoutRequest) {
   EXPECT_THROW({ model.process(input); }, qvac_errors::StatusError);
 }
 
+namespace {
+// calcToken rejects every invalid request with InvalidArgument and a message
+// that names calcToken, never the prompt parser.
+void expectInvalidArgument(
+    const LlamaModel& model, const LlamaModel::CalcTokenRequest& request) {
+  try {
+    (void)model.calcToken(request);
+    ADD_FAILURE() << "calcToken accepted an invalid request";
+  } catch (const qvac_errors::StatusError& e) {
+    const std::string message = e.what();
+    EXPECT_NE(e.codeString().find("InvalidArgument"), std::string::npos)
+        << e.codeString() << " " << message;
+    EXPECT_EQ(message.rfind("calcToken: ", 0), 0U) << message;
+    EXPECT_EQ(message.find("formatPrompt"), std::string::npos) << message;
+  }
+}
+} // namespace
+
 TEST_F(LlamaModelTest, CalcTokenBeforeLoadThrows) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
-  EXPECT_THROW(
-      (void)model.calcToken({.text = "Hello"}), qvac_errors::StatusError);
+  expectInvalidArgument(model, {.text = "Hello"});
 }
 
 TEST_F(LlamaModelTest, CalcTokenCountsRawText) {
@@ -1189,24 +1206,6 @@ TEST_F(LlamaModelTest, CalcTokenRunsBesideAnInFlightRequest) {
   EXPECT_TRUE(countedWhileDecoding);
   EXPECT_EQ(during, expected);
 }
-
-namespace {
-// calcToken rejects every invalid request with InvalidArgument and a message
-// that names calcToken, never the prompt parser.
-void expectInvalidArgument(
-    const LlamaModel& model, const LlamaModel::CalcTokenRequest& request) {
-  try {
-    (void)model.calcToken(request);
-    ADD_FAILURE() << "calcToken accepted an invalid request";
-  } catch (const qvac_errors::StatusError& e) {
-    const std::string message = e.what();
-    EXPECT_NE(e.codeString().find("InvalidArgument"), std::string::npos)
-        << e.codeString() << " " << message;
-    EXPECT_EQ(message.rfind("calcToken: ", 0), 0U) << message;
-    EXPECT_EQ(message.find("formatPrompt"), std::string::npos) << message;
-  }
-}
-} // namespace
 
 TEST_F(LlamaModelTest, CalcTokenRejectsInvalidRequests) {
   if (!fs::exists(getValidModelPath())) {
