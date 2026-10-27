@@ -2,13 +2,21 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <memory>
-#include <sstream>
 #include <string>
+
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE
+#include <os/proc.h>
+#endif
+#endif
 
 #include <ggml-backend.h>
 #include <ggml.h>
 #include <gguf.h>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "OcrBackendSelection.hpp"
 #include "OcrLazyInitializeBackend.hpp"
@@ -63,11 +71,63 @@ bool usesMultipleDevices(
   return detectionDevice != selected.device || recognizerAssisted;
 }
 
-OcrFitResult unavailable(const std::string& reason) {
-  OcrFitResult result;
-  result.reason = reason;
-  result.report = "OCR weight-load fit unavailable: " + reason;
-  return result;
+[[noreturn]] void throwFitError(
+    qvac_errors::general_error::GeneralErrorCode code,
+    const std::string& message) {
+  throw qvac_errors::StatusError(code, "assessFit: " + message);
+}
+
+// The PCI bus ID when the backend reports one, so the same GPU matches across
+// addons built on different backends; the device name otherwise.
+//
+// Unified marks memory the host owns: the CPU, an integrated GPU, a GPU that
+// says it shares host memory, Android's OpenCL GPU, and a device that reports
+// no memory of its own. A unified device that reports none takes the CPU's
+// figures, and on iOS a unified device's free memory is capped at the app's
+// own limit.
+FitDevice fitDevice(ggml_backend_dev_t device, uint64_t usedBytes) {
+  ggml_backend_dev_props props{};
+  ggml_backend_dev_get_props(device, &props);
+  uint64_t freeBytes = static_cast<uint64_t>(props.memory_free);
+  uint64_t totalBytes = static_cast<uint64_t>(props.memory_total);
+  const bool reportsNoMemory = totalBytes == 0;
+#if defined(__ANDROID__)
+  const char* registry =
+      ggml_backend_reg_name(ggml_backend_dev_backend_reg(device));
+  const bool androidOpenCl =
+      registry != nullptr && std::strcmp(registry, "OpenCL") == 0;
+#else
+  const bool androidOpenCl = false;
+#endif
+  const bool unified = props.memory_unified ||
+                       props.type == GGML_BACKEND_DEVICE_TYPE_IGPU ||
+                       props.type == GGML_BACKEND_DEVICE_TYPE_CPU ||
+                       androidOpenCl || reportsNoMemory;
+  if (unified && reportsNoMemory) {
+    if (ggml_backend_dev_t host =
+            ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU)) {
+      size_t hostFree = 0;
+      size_t hostTotal = 0;
+      ggml_backend_dev_memory(host, &hostFree, &hostTotal);
+      freeBytes = static_cast<uint64_t>(hostFree);
+      totalBytes = static_cast<uint64_t>(hostTotal);
+    }
+  }
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+  if (unified) {
+    const uint64_t appLimit = static_cast<uint64_t>(os_proc_available_memory());
+    if (appLimit > 0 && appLimit < freeBytes) {
+      freeBytes = appLimit;
+    }
+  }
+#endif
+  return {
+      props.device_id != nullptr ? props.device_id : props.name,
+      props.name,
+      unified,
+      usedBytes,
+      freeBytes,
+      totalBytes};
 }
 
 } // namespace
@@ -113,8 +173,16 @@ OcrFitResult assessOcrFit(
       doctr ? "dbnet.prob_head.0.weight" : "basenet.slice1.0.weight");
   const auto recognizer = inspectOcrGguf(
       recognizerPath, doctr ? "crnn.features.0.0.weight" : "Prediction.bias");
-  if (!detector || !recognizer)
-    return unavailable("model-unreadable");
+  if (!detector) {
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        "cannot read the detector " + detectorPath);
+  }
+  if (!recognizer) {
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        "cannot read the recognizer " + recognizerPath);
+  }
 
   uint64_t sourceBytes = detector->sourceBytes;
   uint64_t elements = detector->elements;
@@ -122,7 +190,9 @@ OcrFitResult assessOcrFit(
       !addChecked(elements, recognizer->elements) ||
       elements > (K_MAX_JS_SAFE_INTEGER - K_FIXED_WEIGHT_OVERHEAD_BYTES) /
                      K_WEIGHT_COPIES_BYTES_PER_ELEMENT) {
-    return unavailable("footprint-overflow");
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        "the models' footprint overflows a safe integer");
   }
   const uint64_t upperBytes = elements * K_WEIGHT_COPIES_BYTES_PER_ELEMENT +
                               K_FIXED_WEIGHT_OVERHEAD_BYTES;
@@ -132,54 +202,49 @@ OcrFitResult assessOcrFit(
   OcrBackendsHandle backends(config.backendsDir);
   const auto selected = ocr_backend_selection::selectBackendDevice(
       config.backendDevice, config.gpuDevice, config.mainGpu);
-  if (selected.device == nullptr)
-    return unavailable("device-unavailable");
+  if (selected.device == nullptr) {
+    throwFitError(
+        qvac_errors::general_error::InternalError,
+        "no backend device is available");
+  }
 
-  const bool cpu = selected.selectedIsCpu();
-  if (usesMultipleDevices(config, selected))
-    return unavailable("unsupported-config");
-
+  // A detector and recognizer on different devices are not projected.
   OcrFitResult result;
-  result.deviceName = selected.backendName;
-  result.weightsBytes = upperBytes;
-  result.deviceBytes = cpu ? 0 : upperBytes;
-  result.hostBytes = upperBytes; // Includes conservative GGUF staging copies.
-
-  size_t freeBytes = 0;
-  size_t totalBytes = 0;
-  ggml_backend_dev_memory(selected.device, &freeBytes, &totalBytes);
-  if (freeBytes == 0 ||
-      static_cast<uint64_t>(freeBytes) > K_MAX_JS_SAFE_INTEGER ||
-      static_cast<uint64_t>(totalBytes) > K_MAX_JS_SAFE_INTEGER) {
-    result.reason = "device-memory-unavailable";
-    result.report =
-        "OCR weight-load fit unavailable: backend memory is unknown; "
-        "excludes image and inference-graph memory";
+  if (usesMultipleDevices(config, selected)) {
     return result;
   }
 
-  result.deviceFreeBytes = static_cast<uint64_t>(freeBytes);
-  result.deviceTotalBytes = static_cast<uint64_t>(totalBytes);
-
-  if (marginBytes < result.deviceFreeBytes) {
-    const uint64_t budget = result.deviceFreeBytes - marginBytes;
-    if (upperBytes <= budget) {
-      result.status = "fits";
-      result.reason = "weights-fit";
-    } else if (cpu && sourceBytes > budget) {
-      // Source tensors alone are unavoidable during CPU weight loading.
-      result.status = "does-not-fit";
-      result.reason = "source-weights-exceed-memory";
-    }
+  const FitDevice device = fitDevice(selected.device, upperBytes);
+  if (device.freeBytes == 0 || device.freeBytes > K_MAX_JS_SAFE_INTEGER ||
+      device.totalBytes > K_MAX_JS_SAFE_INTEGER) {
+    return result;
   }
 
-  std::ostringstream report;
-  report << "OCR weight-load only; source=" << sourceBytes
-         << " bytes, conservative estimate=" << upperBytes
-         << " bytes, free=" << result.deviceFreeBytes
-         << " bytes, margin=" << marginBytes
-         << " bytes; excludes image and inference-graph memory";
-  result.report = report.str();
+  // A verdict exists only at the two ends: the conservative upper bound fits,
+  // or on the CPU even the source tensors do not. Between them the load may or
+  // may not fit, so the answer stays unknown.
+  const bool cpu = selected.selectedIsCpu();
+  if (marginBytes < device.freeBytes) {
+    const uint64_t budget = device.freeBytes - marginBytes;
+    if (upperBytes <= budget) {
+      result.status = "fits";
+    } else if (cpu && sourceBytes > budget) {
+      result.status = "does-not-fit";
+    }
+  }
+  if (result.status == "unknown") {
+    return result;
+  }
+
+  // The weights land on the selected device. A discrete GPU's load also holds
+  // the GGUF staging copies in host memory while it loads; on a device that
+  // shares host memory, those copies are the same memory, so it is one row.
+  result.devices.push_back(device);
+  ggml_backend_dev_t host =
+      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  if (!device.unified && host != nullptr) {
+    result.devices.push_back(fitDevice(host, upperBytes));
+  }
   return result;
 }
 

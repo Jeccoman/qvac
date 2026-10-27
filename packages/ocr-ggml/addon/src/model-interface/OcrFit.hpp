@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "OcrTypes.hpp"
 
@@ -12,23 +13,27 @@ struct OcrFitFootprint {
   uint64_t elements{};
 };
 
+struct FitDevice {
+  std::string id;
+  std::string name;
+  bool unified{};
+  uint64_t usedBytes{};
+  uint64_t freeBytes{};
+  uint64_t totalBytes{};
+};
+
 struct OcrFitResult {
-  std::string status{"error"};
-  std::string reason{"uncertain"};
-  std::string deviceName;
-  uint64_t deviceBytes{};
-  uint64_t hostBytes{};
-  uint64_t weightsBytes{};
-  uint64_t deviceFreeBytes{};
-  uint64_t deviceTotalBytes{};
-  std::string report;
+  // "fits", "does-not-fit", or "unknown" when no reliable verdict exists.
+  std::string status{"unknown"};
+  std::vector<FitDevice> devices;
 };
 
 // Inspect tensor descriptors only; no tensor data or image is loaded.
 std::optional<OcrFitFootprint>
 inspectOcrGguf(const std::string& path, const char* requiredTensor);
 
-// Advisory weight-load check. Unknown placement or memory yields status=error.
+// Advisory weight-load check. A model that cannot be read, or no backend
+// device, throws.
 OcrFitResult assessOcrFit(
     const std::string& detectorPath, const std::string& recognizerPath,
     const OcrConfig& config, uint64_t marginBytes);
