@@ -9,7 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Reuse MOSS-SoundEffect conditioning across diffusion steps and use supported Metal DiT FlashAttention; memory preflight includes the request cache alongside retained scheduler scratch across requests.
+- Align the shared native `speech-cpp` source to `2026-10-27` across the speech addons.
+- Reuse MOSS-SoundEffect conditioning across diffusion steps and use supported
+  Metal DiT FlashAttention. Memory preflight includes the request cache alongside
+  retained scheduler scratch across requests.
 
 ## [0.14.0] - 2026-10-23
 

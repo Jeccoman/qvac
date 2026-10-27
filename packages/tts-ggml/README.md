@@ -1201,7 +1201,7 @@ Memory preflight includes the request cache (360 MiB for guided generation
 with the released models) alongside the scheduler's retained peak across text
 encoding, diffusion and VAE decoding, including repeated requests.
 FlashAttention can slightly change waveform samples. See the
-[native SoundEffect guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/c477f62b924591317b11a65e18030b9e709a9d32/engines/tts/docs/moss.md#moss-soundeffect)
+[native SoundEffect guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/33174cc8693b1c8cdb44b5ff57b0f120bc89e454/engines/tts/docs/moss.md#moss-soundeffect)
 for precision details and the M1 Ultra measurements.
 
 ```js

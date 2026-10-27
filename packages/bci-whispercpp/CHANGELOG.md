@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Align the shared native `speech-cpp` source to `2026-10-26` across the speech addons.
+- Align the shared native `speech-cpp` source to `2026-10-27` across the speech addons.
 
 ## [0.14.0] - 2026-10-23
 

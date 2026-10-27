@@ -16,7 +16,7 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
-- Align the shared native `speech-cpp` source to `2026-10-26` across the speech addons.
+- Align the shared native `speech-cpp` source to `2026-10-27` across the speech addons.
 
 ### Added
 
