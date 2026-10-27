@@ -209,8 +209,9 @@ public:
   /// Tokens @p request takes on this model. `text` alone is counted raw, with
   /// no chat template and no BOS. With `history` or `tools` the conversation,
   /// `text` (even empty) appended as a user turn, is rendered by the chat
-  /// template as the opening request of a fresh conversation, BOS and
-  /// generation prompt included. Tools the template leaves out are not
+  /// template as the opening request of a fresh conversation, with BOS, and
+  /// with the generation prompt when the last turn is a user or tool turn, as
+  /// `process` renders it. Tools the template leaves out are not
   /// counted, and a `prefill` request, which renders without a user turn, can
   /// differ. Media is not counted. Every invalid request, a media message
   /// included, throws `InvalidArgument` prefixed `calcToken:`; a chat template
