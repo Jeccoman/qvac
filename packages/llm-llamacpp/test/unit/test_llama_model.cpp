@@ -1186,17 +1186,19 @@ TEST_F(LlamaModelTest, CalcTokenRunsBesideAnInFlightRequest) {
 }
 
 namespace {
-// calcToken rejects every invalid request with InvalidArgument.
+// calcToken rejects every invalid request with InvalidArgument and a message
+// that names calcToken, never the prompt parser.
 void expectInvalidArgument(
     const LlamaModel& model, const LlamaModel::CalcTokenRequest& request) {
   try {
     (void)model.calcToken(request);
     ADD_FAILURE() << "calcToken accepted an invalid request";
   } catch (const qvac_errors::StatusError& e) {
+    const std::string message = e.what();
     EXPECT_NE(e.codeString().find("InvalidArgument"), std::string::npos)
-        << e.codeString() << " " << e.what();
-    EXPECT_EQ(std::string(e.what()).rfind("formatPrompt", 0), std::string::npos)
-        << e.what();
+        << e.codeString() << " " << message;
+    EXPECT_EQ(message.rfind("calcToken: ", 0), 0U) << message;
+    EXPECT_EQ(message.find("formatPrompt"), std::string::npos) << message;
   }
 }
 } // namespace

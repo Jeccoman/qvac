@@ -1807,11 +1807,14 @@ LlamaModel::singleRuntimeStatsLocked() const {
 
 namespace {
 
+// Prefix of the prompt parser's errors, as `run()` reports them.
+constexpr std::string_view K_PROMPT_PARSE_TAG = "formatPrompt";
+
 [[noreturn]] void throwInvalidToolTurn(const char* what) {
   throw qvac_errors::StatusError(
       ADDON_ID,
       toString(InvalidInputFormat),
-      string_format("formatPrompt: %s\n", what));
+      string_format("%s: %s\n", K_PROMPT_PARSE_TAG.data(), what));
 }
 
 std::string optionalString(
@@ -1940,8 +1943,7 @@ ParsedPromptPayload parsePromptPayload(
     const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>&
         reasoningTags,
     const std::function<void()>& resetMedia, bool requireObjects = false) {
-  // Errors keep the prefix `run()` callers have always seen.
-  constexpr const char* kParseTag = "formatPrompt";
+  const char* kParseTag = K_PROMPT_PARSE_TAG.data();
   if (input.empty()) {
     resetMedia();
     std::string errorMsg = string_format("%s: empty prompt\n", kParseTag);
@@ -2129,8 +2131,29 @@ ParsedPromptPayload parsePromptPayload(
   return parsed;
 }
 
-// Parses one calcToken input. Its errors are `InvalidArgument`, like the rest
-// of calcToken's, and name the field instead of formatPrompt.
+// Rethrows @p error as calcToken reports every rejection: `InvalidArgument`,
+// prefixed `calcToken:` and, when given, the input @p field, instead of the
+// prompt parser's prefix.
+[[noreturn]] void
+throwCountError(const qvac_errors::StatusError& error, const char* field) {
+  std::string_view message = error.what();
+  if (message.substr(0, K_PROMPT_PARSE_TAG.size()) == K_PROMPT_PARSE_TAG &&
+      message.substr(K_PROMPT_PARSE_TAG.size(), 2) == ": ") {
+    message.remove_prefix(K_PROMPT_PARSE_TAG.size() + 2);
+  }
+  while (!message.empty() && message.back() == '\n') {
+    message.remove_suffix(1);
+  }
+  const std::string prefix = field == nullptr
+                                 ? std::string("calcToken: ")
+                                 : string_format("calcToken: %s: ", field);
+  throw qvac_errors::StatusError(
+      ADDON_ID,
+      toString(qvac_errors::general_error::InvalidArgument),
+      prefix + std::string(message));
+}
+
+// Parses one calcToken input, strictly and without touching staged media.
 ParsedPromptPayload parseCountInput(
     const std::string& json, const char* field, bool isTextLlm,
     const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>&
@@ -2145,19 +2168,7 @@ ParsedPromptPayload parseCountInput(
         [] {},
         /* requireObjects = */ true);
   } catch (const qvac_errors::StatusError& error) {
-    constexpr std::string_view kRunTag = "formatPrompt: ";
-    std::string_view message = error.what();
-    if (message.substr(0, kRunTag.size()) == kRunTag) {
-      message.remove_prefix(kRunTag.size());
-    }
-    while (!message.empty() && message.back() == '\n') {
-      message.remove_suffix(1);
-    }
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(qvac_errors::general_error::InvalidArgument),
-        string_format(
-            "calcToken: %s: %s", field, std::string(message).c_str()));
+    throwCountError(error, field);
   }
 }
 
@@ -2236,7 +2247,11 @@ size_t LlamaModel::calcToken(const CalcTokenRequest& request) const {
         toString(qvac_errors::general_error::InvalidArgument),
         "calcToken: history and text hold no message to count");
   }
-  return context.countChatTokens(conversation.chatMsgs, conversation.tools);
+  try {
+    return context.countChatTokens(conversation.chatMsgs, conversation.tools);
+  } catch (const qvac_errors::StatusError& error) {
+    throwCountError(error, nullptr);
+  }
 }
 
 void LlamaModel::resetState(bool resetStats) {
