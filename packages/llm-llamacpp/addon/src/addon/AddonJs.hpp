@@ -1057,10 +1057,11 @@ inline js_value_t* discardCache(js_env_t* env, js_callback_info_t* info) try {
 JSCATCH
 
 /// `calcToken(instance, { text?, history?, tools? })`: tokens the input takes
-/// on the loaded model (see LlamaModel::calcToken). `history` and `tools` are
-/// JSON strings, like `runJob`'s `input`. Resolves with the count as a plain
-/// number; see utils::countRenderedChatTokens for `toolDefinitionsDropped`.
-/// Off the JS thread: a reload holds the model's state lock.
+/// on the loaded model (see LlamaModel::calcToken, which lists what the count
+/// leaves out). `history` and `tools` are JSON strings, like `runJob`'s
+/// `input`. Resolves with the count as a plain number. A field that is not a
+/// string throws synchronously; every other error rejects. Off the JS thread:
+/// a reload holds the model's state lock.
 inline js_value_t* calcToken(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 

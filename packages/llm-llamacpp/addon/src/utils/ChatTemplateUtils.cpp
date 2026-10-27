@@ -1067,8 +1067,6 @@ size_t countRenderedChatTokens(
     inputs.tools = std::move(toolChoice.tools);
     inputs.tool_choice = toolChoice.choice;
   }
-  // Only the count is returned. `toolDefinitionsDropped` could be returned
-  // with it, to tell a caller the template left the tools out of the count.
   return tokenize(getPrompt(tmpls, inputs, /* forRequest = */ false).prompt)
       .size();
 }
